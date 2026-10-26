@@ -39,12 +39,34 @@ const fail = (msg) => { failures++; console.log('FAIL', msg); };
       const out = await OpcodeProgram.runProgram({ memfsModule: tc.memfsModule, wasm: r.wasm, stdin: b.stdin || '' });
       console.log(`   ${name} -> ${JSON.stringify(out.stdout)}${out.exitCode ? ' exit ' + out.exitCode : ''}`);
     }
+    let previousSolution = null;
     for (const ex of lesson.exercises || []) {
-      for (const [label, given, shouldPass] of [['solution', Object.assign({}, ex.files, ex.solution), true], ['starter', ex.files, false]]) {
+      let variants;
+      let learnerNames = null;
+      if (ex.project) {
+        // Project exercises: course files plus the learner's files, starting
+        // from each file's starter (what a learner arriving here would have).
+        const empty = { file: () => null, exerciseFile: () => null, isSolved: () => false };
+        const base = Course.resolveProject(ex, empty).files;
+        learnerNames = Object.keys(ex.project.learner || {});
+        variants = [['solution', Object.assign({}, base, ex.solution), true], ['starter', base, false]];
+        // Each exercise should start where the previous one's solution ended.
+        if (previousSolution) {
+          for (const name of learnerNames) {
+            if (previousSolution[name] != null && previousSolution[name] !== ex.project.learner[name].starter) {
+              fail(`${ex.id}: starter of ${name} differs from the previous exercise's solution`);
+            }
+          }
+        }
+        previousSolution = Object.assign({}, previousSolution, ex.solution);
+      } else {
+        variants = [['solution', Object.assign({}, ex.files, ex.solution), true], ['starter', ex.files, false]];
+      }
+      for (const [label, given, shouldPass] of variants) {
         // The learner's program must build on its own (that is what Run does).
         const own = await tc.build(given);
         if (!own.ok) { if (shouldPass) fail(`${ex.id} ${label} does not compile for Run: ${own.diagnostics}`); continue; }
-        const files = given;
+        const files = learnerNames ? Object.fromEntries(learnerNames.map((n) => [n, given[n]])) : given;
         const plan = Checker.checkBuild(ex, given);
         const r = await tc.build(plan.files, plan.options);
         if (!r.ok) { if (shouldPass) fail(`${ex.id} ${label} does not compile: ${r.diagnostics}`); continue; }

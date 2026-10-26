@@ -66,17 +66,17 @@
       <div class="pane code-pane">
         <div class="toolbar">
           <div class="file-tabs" id="file-tabs" role="tablist" aria-label="Files"></div>
+        </div>
+        <div class="editor" id="editor"></div>
+        <div class="run-bar">
           <div class="tools">
             <button class="btn ghost" id="btn-reset" title="Put the starting code back">Reset</button>
             <button class="btn ghost" id="btn-hint">Hint</button>
             <button class="btn ghost" id="btn-solution">Solution</button>
+            <button class="btn ghost" id="btn-download" title="Download every file of your emulator project as a .zip" hidden>Download</button>
           </div>
-        </div>
-        <div class="editor" id="editor"></div>
-        <div class="run-bar">
-          <span class="keys"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs, add <kbd>Shift</kbd> to check</span>
-          <button class="btn" id="btn-run">Run</button>
-          <button class="btn primary" id="btn-check">Check</button>
+          <button class="btn" id="btn-run" title="Run (Ctrl+Enter)">Run</button>
+          <button class="btn primary" id="btn-check" title="Check (Ctrl+Shift+Enter)">Check</button>
         </div>
       </div>
 
@@ -114,12 +114,14 @@
   <script src="lessons/c-memory.js"></script>
   <script src="lessons/c-bits.js"></script>
   <script src="lessons/c-files.js"></script>
+  <script src="lessons/nes-overview.js"></script>
 
   <script src="js/checker.js"></script>
   <script src="js/highlight.js"></script>
   <script src="js/progress.js"></script>
   <script src="js/compiler-client.js"></script>
   <script src="js/console.js"></script>
+  <script src="js/zip.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -22,6 +22,7 @@
     exIndex: 0,
     exercise: null,
     docs: {},          // file name -> CodeMirror.Doc
+    readOnly: new Set(), // course-owned files in a project exercise
     activeFile: null,
     busy: false,
     hintsShown: 0,
@@ -179,6 +180,7 @@
       case 'note': return el('aside', { class: `callout ${b.kind || ''}` },
         `<span class="callout-label">${b.kind === 'nes' ? 'On the NES' : b.kind === 'warn' ? 'Watch out' : 'Note'}</span>${b.html}`);
       case 'code': return renderCode(b);
+      case 'figure': return el('figure', { class: 'fig' }, `${b.html}${b.caption ? `<figcaption>${b.caption}</figcaption>` : ''}`);
       case 'quiz': return renderQuiz(b);
       case 'table': return el('table', { class: 'tbl' },
         `<thead><tr>${b.head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${b.rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`);
@@ -253,32 +255,63 @@
     return files;
   }
 
+  // Only the files the learner writes (course files in a project are read-only).
+  function learnerFiles() {
+    const files = currentFiles();
+    for (const name of current.readOnly) delete files[name];
+    return files;
+  }
+
+  const isProject = (ex) => !!(ex && ex.project);
+
+  function saveWork() {
+    const ex = current.exercise;
+    if (!ex) return;
+    if (isProject(ex)) {
+      for (const [name, text] of Object.entries(learnerFiles())) Progress.setProjectFile(name, text);
+    }
+    Progress.setCode(ex.id, learnerFiles());
+  }
+
   let saveTimer = null;
   function scheduleSave() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      if (current.exercise) Progress.setCode(current.exercise.id, currentFiles());
-    }, 400);
+    saveTimer = setTimeout(saveWork, 400);
   }
 
-  function setFiles(files) {
+  function setFiles(files, readOnly = [], open) {
     current.docs = {};
+    current.readOnly = new Set(readOnly);
     for (const [name, text] of Object.entries(files)) {
       const doc = CodeMirror.Doc(text, 'text/x-csrc');
       doc.on('change', scheduleSave);
       current.docs[name] = doc;
     }
     const names = Object.keys(files);
-    current.activeFile = names.includes('main.c') ? 'main.c' : names[0];
-    editor.swapDoc(current.docs[current.activeFile]);
+    current.activeFile = open && names.includes(open) ? open : names.includes('main.c') ? 'main.c' : names[0];
+    showDoc(current.activeFile);
     renderFileTabs();
   }
+
+  function showDoc(name) {
+    editor.swapDoc(current.docs[name]);
+    editor.setOption('readOnly', current.readOnly.has(name));
+    $('#editor').classList.toggle('locked', current.readOnly.has(name));
+    $('#btn-reset').disabled = current.readOnly.has(name);
+  }
+
+  const LOCK = '<svg class="lock" viewBox="0 0 12 14" aria-hidden="true"><rect x="1.5" y="6" width="9" height="7" rx="1.5" fill="currentColor"/><path d="M3.5 6V4.2a2.5 2.5 0 0 1 5 0V6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 
   function renderFileTabs() {
     const tabs = $('#file-tabs');
     tabs.innerHTML = '';
     for (const name of Object.keys(current.docs)) {
-      const b = el('button', { class: `file-tab${name === current.activeFile ? ' active' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(name === current.activeFile) }, H.esc(name));
+      const locked = current.readOnly.has(name);
+      const b = el('button', {
+        class: `file-tab${name === current.activeFile ? ' active' : ''}${locked ? ' is-locked' : ''}`,
+        type: 'button', role: 'tab', 'aria-selected': String(name === current.activeFile),
+        title: locked ? 'Provided by the course; read-only' : null,
+      }, `${H.esc(name)}${locked ? LOCK : ''}`);
       b.addEventListener('click', () => openFile(name));
       tabs.appendChild(b);
     }
@@ -287,7 +320,7 @@
   function openFile(name, line, col) {
     if (!current.docs[name]) return;
     current.activeFile = name;
-    editor.swapDoc(current.docs[name]);
+    showDoc(name);
     renderFileTabs();
     if (line) {
       const pos = { line: line - 1, ch: Math.max(0, (col || 1) - 1) };
@@ -312,6 +345,8 @@
       group.appendChild(a);
     });
     sw.appendChild(group);
+    if (isProject(current.exercise)) sw.appendChild(el('span', { class: 'project-pill', title: 'These files are your emulator. They are kept from one lesson to the next.' }, 'Emulator project'));
+    $('#btn-download').hidden = !isProject(current.exercise);
   }
 
   function renderPrompt() {
@@ -334,10 +369,17 @@
     hb.textContent = left <= 0 ? 'No more hints' : current.hintsShown ? `Hint ${current.hintsShown + 1} of ${ex.hints.length}` : 'Hint';
   }
 
+  const projectStore = {
+    file: (name) => Progress.projectFile(name),
+    exerciseFile: (exId, name) => Progress.exerciseFile(exId, name),
+    isSolved: (exId) => Progress.isSolved(exId),
+  };
+
   function loadExercise(lesson, index) {
     if (!lesson.exercises || !lesson.exercises.length) return;
     index = Math.max(0, Math.min(index, lesson.exercises.length - 1));
-    if (current.exercise && current.exercise.id) Progress.setCode(current.exercise.id, currentFiles());
+    clearTimeout(saveTimer);
+    saveWork();
     const ex = lesson.exercises[index];
     current.exIndex = index;
     current.exercise = ex;
@@ -346,14 +388,49 @@
     $('#ex-title').textContent = ex.title;
     renderExerciseSwitch();
     renderPrompt();
-    setFiles(Progress.getCode(ex.id) || ex.files);
+    let created = {};
+    if (isProject(ex)) {
+      const r = Course.resolveProject(ex, projectStore);
+      created = r.created;
+      for (const name of Object.keys(created)) Progress.setProjectFile(name, r.files[name]);
+      setFiles(r.files, r.readOnly, ex.project.open);
+    } else {
+      setFiles(Progress.getCode(ex.id) || ex.files);
+    }
     const saved = Progress.getStdin(ex.id);
     $('#stdin').value = saved != null ? saved : (ex.stdin || (!ex.harness && ex.tests[0] && ex.tests[0].stdin) || '');
     requestAnimationFrame(fitStdin);
     clearConsole();
+    for (const [name, how] of Object.entries(created)) {
+      const from = ex.project.learner[name].from;
+      if (how === 'imported') consoleNote(`<strong>${H.esc(name)}</strong> was added to your emulator project, starting from your own solution to “${H.esc(exerciseTitle(from.exercise))}”.`, 'project');
+      else consoleNote(`<strong>${H.esc(name)}</strong> was added to your emulator project.`, 'project');
+    }
     consoleNote(Progress.isSolved(ex.id)
       ? 'You have already solved this one. Run and Check still work if you want to experiment.'
       : 'Write your code, then press Run to try it or Check to test it.');
+  }
+
+  function exerciseTitle(exId) {
+    for (const entry of Course.flat()) {
+      const lesson = Course.get(entry.id);
+      const found = lesson && lesson.exercises.find((e) => e.id === exId);
+      if (found) return found.title;
+    }
+    return exId;
+  }
+
+  function downloadProject() {
+    saveWork();
+    const files = Object.assign({}, Progress.projectFiles(), currentFiles());
+    const zipFiles = {};
+    for (const name of Object.keys(files).sort()) zipFiles[`opcode-nes/${name}`] = files[name];
+    const url = URL.createObjectURL(Zip.makeZip(zipFiles));
+    const a = el('a', { href: url, download: 'opcode-nes.zip' });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
   /* ---------- Console ---------- */
@@ -417,7 +494,7 @@
     }
     if (!current.exercise) return;
     Progress.setStdin(current.exercise.id, $('#stdin').value);
-    Progress.setCode(current.exercise.id, currentFiles());
+    saveWork();
     clearConsole();
     $('#console-title').textContent = 'Console: run';
     setBusy(true, 'run');
@@ -425,7 +502,7 @@
       const r = await buildCurrent();
       if (!r.ok) {
         consoleDiag(r.diagnostics);
-        consoleNote(r.linkError ? 'The program could not be linked. Check the names of the functions you call.' : 'The program did not compile, so nothing ran. Fix the first error above and try again.', 'bad');
+        consoleNote(r.linkError ? linkAdvice(r.diagnostics) : 'The program did not compile, so nothing ran. Fix the first error above and try again.', 'bad');
         return;
       }
       consoleDiag(r.diagnostics);
@@ -448,6 +525,15 @@
     }
   }
 
+  function linkAdvice(diag) {
+    const missing = [...new Set([...String(diag).matchAll(/undefined symbol: (\w+)/g)].map((m) => m[1]))];
+    if (missing.length) {
+      const names = missing.map((n) => `<code>${H.esc(n)}</code>`).join(', ');
+      return `Every file compiled, but nothing defines ${names}. Write ${missing.length > 1 ? 'them' : 'it'} with exactly that name, and make sure it is not <code>static</code>.`;
+    }
+    return 'The program could not be linked. Check the names and parameters of the functions you call.';
+  }
+
   function showLines(lines, highlight) {
     if (!lines.length) return '<span class="muted">(nothing)</span>';
     return lines.map((l, i) => `<span class="${i === highlight ? 'diff-line' : ''}">${H.esc(l) || ' '}</span>`).join('\n');
@@ -456,7 +542,7 @@
   async function check() {
     if (current.busy || !current.exercise) return;
     const ex = current.exercise;
-    Progress.setCode(ex.id, currentFiles());
+    saveWork();
     clearConsole();
     $('#console-title').textContent = 'Console: check';
     setBusy(true, 'check');
@@ -490,7 +576,7 @@
         if (ok) passed++;
         else if (!firstFail) firstFail = { t, res, cmp };
       }
-      const ruleFails = Checker.checkRules(ex.rules, currentFiles());
+      const ruleFails = Checker.checkRules(ex.rules, learnerFiles());
       if (firstFail) {
         const { t, res, cmp } = firstFail;
         const box = consoleAppend(el('div', { class: 'fail-detail' }));
@@ -567,9 +653,16 @@
     }
     const use = el('button', { class: 'btn', type: 'button' }, 'Replace my code with this');
     use.addEventListener('click', () => {
-      if (!confirm('Replace your code with the solution? Your current code will be lost.')) return;
-      setFiles(Object.assign({}, ex.files, ex.solution));
-      Progress.setCode(ex.id, currentFiles());
+      const names = Object.keys(ex.solution).join(', ');
+      if (!confirm(`Replace your ${names} with the solution? Your current code in ${Object.keys(ex.solution).length > 1 ? 'those files' : 'that file'} will be lost.`)) return;
+      if (isProject(ex)) {
+        for (const [name, text] of Object.entries(ex.solution)) {
+          if (current.docs[name]) current.docs[name].setValue(text);
+        }
+      } else {
+        setFiles(Object.assign({}, ex.files, ex.solution));
+      }
+      saveWork();
     });
     box.appendChild(use);
   }
@@ -577,6 +670,17 @@
   function resetCode() {
     const ex = current.exercise;
     if (!ex) return;
+    if (isProject(ex)) {
+      const name = current.activeFile;
+      const spec = ex.project.learner && ex.project.learner[name];
+      if (!spec) return;
+      if (!confirm(`Put ${name} back to how it was at the start of this exercise? Your changes to ${name} will be lost.`)) return;
+      current.docs[name].setValue(spec.starter);
+      saveWork();
+      clearConsole();
+      consoleNote(`${H.esc(name)} restored.`);
+      return;
+    }
     if (!confirm('Put the starting code back? Your changes to this exercise will be lost.')) return;
     Progress.clearCode(ex.id);
     setFiles(ex.files);
@@ -590,6 +694,7 @@
   $('#btn-solution').addEventListener('click', showSolution);
   $('#btn-reset').addEventListener('click', resetCode);
   $('#btn-clear').addEventListener('click', clearConsole);
+  $('#btn-download').addEventListener('click', downloadProject);
   function fitStdin() {
     const t = $('#stdin');
     t.style.height = 'auto';
@@ -728,7 +833,7 @@
 
   window.addEventListener('hashchange', route);
   window.addEventListener('beforeunload', () => {
-    if (current.exercise) Progress.setCode(current.exercise.id, currentFiles());
+    saveWork();
     Progress.flush();
   });
 

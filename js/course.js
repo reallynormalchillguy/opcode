@@ -16,7 +16,19 @@
  *     { t: 'table', head: [..], rows: [[..]] }
  *   ],
  *   exercises: [{ id, title, prompt, files, tests: [{ name, stdin?, expect }],
- *                 rules?: [{ re, flags?, must: true|false, msg }], hints, solution }]
+ *                 rules?: [{ re, flags?, must: true|false, msg }], hints, solution,
+ *                 harness?: { 'check.c': ... } hidden files added on Check }]
+ *
+ * Emulator-project exercises use `project` instead of `files`:
+ *   project: {
+ *     course:  { 'main.c': text },   read-only files, always this version
+ *     learner: { 'bus.c': { starter: text, from?: { exercise, file } } },
+ *     open: 'bus.c',                 file shown first
+ *   }
+ * Learner files live in one shared project: the first exercise that needs a
+ * file creates it (copying the learner's solved code from `from` when there
+ * is some, otherwise `starter`); later exercises keep the learner's version.
+ * `solution` then lists complete learner files.
  */
 (function () {
   'use strict';
@@ -62,8 +74,31 @@
 
   const lessons = new Map();
 
+  // Works out the files of a project exercise.
+  // store: { file(name), exerciseFile(exId, name), isSolved(exId) }
+  // Returns { files, readOnly: [names], created: { name: 'starter'|'imported' } }
+  function resolveProject(ex, store) {
+    const files = {};
+    const created = {};
+    for (const [name, spec] of Object.entries(ex.project.learner || {})) {
+      const saved = store.file(name);
+      if (saved != null) {
+        files[name] = saved;
+        continue;
+      }
+      const from = spec.from;
+      const imported = from && store.isSolved(from.exercise) ? store.exerciseFile(from.exercise, from.file || name) : null;
+      files[name] = imported != null ? imported : spec.starter;
+      created[name] = imported != null ? 'imported' : 'starter';
+    }
+    const readOnly = Object.keys(ex.project.course || {});
+    for (const name of readOnly) files[name] = ex.project.course[name];
+    return { files, readOnly, created };
+  }
+
   window.Course = {
     OUTLINE,
+    resolveProject,
     add(lesson) { lessons.set(lesson.id, lesson); },
     get(id) { return lessons.get(id); },
     has(id) { return lessons.has(id); },

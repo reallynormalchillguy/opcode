@@ -3,19 +3,19 @@
   'use strict';
 
   const KEY = 'opcode.v1';
-  let state = { solved: {}, code: {}, stdin: {}, hintsSeen: {}, last: null };
+  // project.files: the learner's own emulator files, shared by every NES exercise.
+  let state = { solved: {}, code: {}, stdin: {}, hintsSeen: {}, last: null, project: { files: {} } };
 
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) state = Object.assign(state, JSON.parse(raw));
+    if (!state.project || !state.project.files) state.project = { files: {} };
   } catch (e) { /* storage unavailable: progress lasts for this visit only */ }
 
   let saveTimer = null;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
-    }, 250);
+    saveTimer = setTimeout(flush, 250);
   }
 
   function flush() {
@@ -39,6 +39,16 @@
     lessonDone(lesson) {
       const ex = lesson.exercises || [];
       return ex.length > 0 && ex.every((e) => state.solved[e.id]);
+    },
+
+    // The emulator project.
+    projectFile: (name) => (name in state.project.files ? state.project.files[name] : null),
+    projectFiles: () => Object.assign({}, state.project.files),
+    setProjectFile(name, text) { state.project.files[name] = text; save(); },
+    // The text of a file the learner saved in an earlier exercise (or null).
+    exerciseFile(exId, name) {
+      const files = state.code[exId];
+      return files && name in files ? files[name] : null;
     },
   };
 })();

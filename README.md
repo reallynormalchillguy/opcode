@@ -60,6 +60,15 @@ when they press Check. The learner's own `main` is renamed so the harness
 `main` runs instead. A harness file with the same name as a learner file (for
 example `main.c`) replaces it during Check.
 
+## The emulator project
+
+From lesson 12 on, exercises use a `project` instead of `files` (see the
+comment at the top of `js/course.js`). The learner's emulator files are kept
+in one shared project in localStorage, so code written in one lesson is there
+in the next. Course-owned files (headers, test programs) are read-only. The
+workbench's Download button saves the whole project as a .zip
+(`js/zip.js`).
+
 ## Credits
 
 - Clang/LLD in WebAssembly and the in-memory file system: [binji/wasm-clang](https://github.com/binji/wasm-clang)
