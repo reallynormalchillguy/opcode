@@ -2,7 +2,7 @@
 self.importScripts('wasi-runtime.js', 'program.js');
 
 self.onmessage = async (event) => {
-  const { memfsModule, wasm, stdin } = event.data;
+  const { memfsModule, wasm, stdin, files } = event.data;
   let buffer = '';
   let bufferFd = 1;
   let last = Date.now();
@@ -17,6 +17,7 @@ self.onmessage = async (event) => {
       memfsModule,
       wasm,
       stdin,
+      files: files || {},
       onOutput(text, fd) {
         if (fd !== bufferFd) { flush(); bufferFd = fd; }
         buffer += text;

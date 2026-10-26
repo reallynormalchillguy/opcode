@@ -398,7 +398,7 @@
       setFiles(Progress.getCode(ex.id) || ex.files);
     }
     const saved = Progress.getStdin(ex.id);
-    $('#stdin').value = saved != null ? saved : (ex.stdin || (!ex.harness && ex.tests[0] && ex.tests[0].stdin) || '');
+    $('#stdin').value = saved != null ? saved : ex.stdin != null ? ex.stdin : ((!ex.harness && ex.tests[0] && ex.tests[0].stdin) || '');
     requestAnimationFrame(fitStdin);
     clearConsole();
     for (const [name, how] of Object.entries(created)) {
@@ -478,6 +478,27 @@
     runBtn.disabled = busy && mode !== 'run';
   }
 
+  // Data files (ROMs, logs) an exercise gives its programs, fetched once.
+  const dataCache = new Map();
+  async function loadData(ex) {
+    const out = {};
+    for (const [name, url] of Object.entries(ex.data || {})) {
+      if (!dataCache.has(url)) {
+        dataCache.set(url, fetch(url).then((r) => {
+          if (!r.ok) throw new Error(`Could not download ${url} (${r.status})`);
+          return r.arrayBuffer();
+        }).then((b) => new Uint8Array(b)));
+      }
+      try {
+        out[name] = await dataCache.get(url);
+      } catch (e) {
+        dataCache.delete(url);
+        throw e;
+      }
+    }
+    return out;
+  }
+
   async function buildCurrent(forCheck) {
     if (Compiler.status.state !== 'ready') consoleNote('Waiting for the compiler to finish downloading…', 'muted');
     const t = consoleNote('Compiling…', 'muted');
@@ -508,6 +529,7 @@
       consoleDiag(r.diagnostics);
       const pre = consoleAppend(el('pre', { class: 'stdout' }));
       const res = await Compiler.run(r.wasm, {
+        files: await loadData(current.exercise),
         stdin: $('#stdin').value,
         timeoutMs: 15000,
         onOutput: (text, fd) => {
@@ -567,9 +589,10 @@
       const results = consoleAppend(el('ol', { class: 'tests' }));
       let firstFail = null;
       let passed = 0;
+      const data = await loadData(ex);
       for (const t of ex.tests) {
         const li = results.appendChild(el('li', { class: 'test running' }, `<span class="mark"></span>${H.esc(t.name)}`));
-        const res = await Compiler.run(r.wasm, { stdin: t.stdin || '', timeoutMs: TEST_TIMEOUT_MS });
+        const res = await Compiler.run(r.wasm, { stdin: t.stdin || '', timeoutMs: t.timeoutMs || TEST_TIMEOUT_MS, files: data });
         const cmp = Checker.compare(t.expect, res.stdout);
         const ok = cmp.pass && !res.trap && !res.timedOut && !res.truncated;
         li.className = `test ${ok ? 'pass' : 'fail'}`;
@@ -674,7 +697,7 @@
       const name = current.activeFile;
       const spec = ex.project.learner && ex.project.learner[name];
       if (!spec) return;
-      if (!confirm(`Put ${name} back to how it was at the start of this exercise? Your changes to ${name} will be lost.`)) return;
+      if (!confirm(`Replace ${name} with the course's version from the start of this exercise? It includes everything up to the previous exercise. Your own ${name} will be lost.`)) return;
       current.docs[name].setValue(spec.starter);
       saveWork();
       clearConsole();

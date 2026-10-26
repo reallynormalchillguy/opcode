@@ -23,7 +23,8 @@
   }
 
   // Returns { exitCode, trap?: string, stdout, stderr, truncated }
-  async function runProgram({ memfsModule, wasm, stdin = '', onOutput, maxOutput = 200000, argv = ['program'], env = {} }) {
+  // files: { 'name.nes': Uint8Array } placed next to the program, so it can fopen them.
+  async function runProgram({ memfsModule, wasm, stdin = '', onOutput, maxOutput = 200000, argv = ['program'], env = {}, files = {} }) {
     const decoders = { 1: new TextDecoder(), 2: new TextDecoder() };
     let stdout = '';
     let stderr = '';
@@ -45,7 +46,7 @@
     let app;
     try {
       const module = wasm instanceof WebAssembly.Module ? wasm : await WebAssembly.compile(wasm);
-      app = new App(module, memfs, argv, env);
+      app = new App(module, memfs, argv, env, files);
       await app.ready;
     } catch (e) {
       return { exitCode: null, trap: 'The program could not be started: ' + (e && e.message), stdout, stderr, truncated };

@@ -12,7 +12,9 @@ require(path.join(dir, 'program.js'));
 const Checker = require(path.join(root, 'js', 'checker.js'));
 globalThis.window = globalThis;
 require(path.join(root, 'js', 'course.js'));
-for (const f of fs.readdirSync(path.join(root, 'lessons')).sort()) require(path.join(root, 'lessons', f));
+// Load lesson files in the same order as the page does.
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+for (const m of html.matchAll(/<script src="(lessons\/[^"]+)"/g)) require(path.join(root, m[1]));
 
 const EXPECT_FAIL = new Set(['broken.c']);
 let failures = 0;
@@ -73,13 +75,14 @@ const fail = (msg) => { failures++; console.log('FAIL', msg); };
         if (shouldPass && r.diagnostics) fail(`${ex.id} solution has warnings: ${r.diagnostics}`);
         let allPass = true;
         for (const t of ex.tests) {
-          const out = await OpcodeProgram.runProgram({ memfsModule: tc.memfsModule, wasm: r.wasm, stdin: t.stdin || '' });
+          const data = Object.fromEntries(Object.entries(ex.data || {}).map(([n, url]) => [n, new Uint8Array(fs.readFileSync(path.join(root, url)))]));
+          const out = await OpcodeProgram.runProgram({ memfsModule: tc.memfsModule, wasm: r.wasm, stdin: t.stdin || '', files: data });
           const c = Checker.compare(t.expect, out.stdout);
           if (!c.pass) { allPass = false; if (shouldPass) fail(`${ex.id} solution fails "${t.name}": got ${JSON.stringify(out.stdout)}`); }
         }
         const ruleFails = Checker.checkRules(ex.rules, files);
         if (shouldPass && ruleFails.length) fail(`${ex.id} solution breaks rules: ${ruleFails}`);
-        if (!shouldPass && allPass && ex.tests.some((t) => t.expect !== '')) fail(`${ex.id} starter already passes`);
+        if (!shouldPass && allPass && !ex.starterMayPass && ex.tests.some((t) => t.expect !== '')) fail(`${ex.id} starter already passes`);
       }
       console.log(`   exercise ${ex.id} ok`);
     }

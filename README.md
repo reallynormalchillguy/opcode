@@ -69,9 +69,27 @@ in the next. Course-owned files (headers, test programs) are read-only. The
 workbench's Download button saves the whole project as a .zip
 (`js/zip.js`).
 
+## The reference 6502 (tools/ref6502)
+
+The CPU lessons (13 to 15) are generated from a reference implementation:
+
+- `cpu.staged.c` is a complete, nestest-passing 6502 with `//@ N` markers
+  saying which exercise stage each part belongs to. `stage.py` cuts out the
+  `cpu.c` a learner has after stage N.
+- `opcodes.py` is the table of the 151 official opcodes; `gen_trace.py`
+  makes the course's disassembler (`trace.c`), `gen_main.py` the test bench
+  and the nestest runner, and `tests.py` holds the test programs.
+- `python3 build.py` checks the table against the reference, compiles every
+  stage with gcc, runs the tests and nestest, and writes
+  `lessons/cpu-data.js`. Run it after changing anything in that folder, then
+  `node tests/lessons.test.js` to check the same in the browser compiler.
+
 ## Credits
 
 - Clang/LLD in WebAssembly and the in-memory file system: [binji/wasm-clang](https://github.com/binji/wasm-clang)
   (Apache 2.0, LLVM licence: `compiler/LICENSE.*`).
 - [CodeMirror 5](https://codemirror.net/5/) (MIT).
 - Fonts: Archivo and IBM Plex Mono (SIL Open Font License).
+- `nes/nestest.nes`, its documentation and log: nestest by Kevin Horton,
+  freely distributed for testing emulators. `nes/nestest-official.log` is
+  the official-instruction part of the log, reformatted.

@@ -172,7 +172,8 @@
 
   // One running WASI program (clang, lld, or the learner's program).
   class App {
-    constructor(module, memfs, argv, extraImports = {}) {
+    // dataFiles: { 'name': Uint8Array } read-only files the program can fopen.
+    constructor(module, memfs, argv, extraImports = {}, dataFiles = null) {
       this.argv = argv;
       this.environ = { USER: 'opcode' };
       this.memfs = memfs;
@@ -181,6 +182,7 @@
         'args_get', 'random_get', 'clock_time_get', 'clock_res_get', 'poll_oneoff', 'sched_yield',
       ]);
       Object.assign(wasi, memfs.exports);
+      if (dataFiles && Object.keys(dataFiles).length) this.addDataFiles(wasi, dataFiles);
       const imports = { wasi_unstable: wasi, env: extraImports };
       this.ready = WebAssembly.instantiate(module, imports).then((instance) => {
         this.instance = instance;
@@ -204,6 +206,96 @@
     }
 
     proc_exit(code) { throw new ProcExit(code); }
+
+    // The in-memory file system cannot read files written by the page in a
+    // way C's stdio understands (it ignores the end of the file), so files
+    // given to a program are served from here instead.
+    addDataFiles(wasi, dataFiles) {
+      const files = new Map(Object.entries(dataFiles).map(([k, v]) => [k.replace(/^\.?\//, ''), v]));
+      const open = new Map(); // fd -> { data, pos }
+      let nextFd = 100;
+      const base = {
+        path_open: wasi.path_open, fd_read: wasi.fd_read, fd_seek: wasi.fd_seek, fd_close: wasi.fd_close,
+        fd_fdstat_get: wasi.fd_fdstat_get, fd_filestat_get: wasi.fd_filestat_get, fd_tell: wasi.fd_tell,
+      };
+      const EBADF = 8, EINVAL = 28;
+      wasi.path_open = (dirfd, dirflags, path, pathLen, oflags, rightsBase, rightsInh, fdflags, fdOut) => {
+        this.mem.check();
+        const name = new TextDecoder().decode(this.mem.u8.subarray(path, path + pathLen)).replace(/^\.?\//, '');
+        const writing = oflags & (1 | 8); // CREAT or TRUNC
+        if (files.has(name) && !writing) {
+          const fd = nextFd++;
+          open.set(fd, { data: files.get(name), pos: 0 });
+          this.mem.write32(fdOut, fd);
+          return 0;
+        }
+        return base.path_open(dirfd, dirflags, path, pathLen, oflags, rightsBase, rightsInh, fdflags, fdOut);
+      };
+      wasi.fd_read = (fd, iovs, iovsLen, nreadOut) => {
+        const f = open.get(fd);
+        if (!f) return base.fd_read(fd, iovs, iovsLen, nreadOut);
+        this.mem.check();
+        let total = 0;
+        for (let i = 0; i < iovsLen; i++) {
+          const buf = this.mem.read32(iovs + i * 8);
+          const len = this.mem.read32(iovs + i * 8 + 4);
+          const n = Math.min(len, f.data.length - f.pos);
+          if (n > 0) {
+            this.mem.u8.set(f.data.subarray(f.pos, f.pos + n), buf);
+            f.pos += n;
+            total += n;
+          }
+          if (n < len) break;
+        }
+        this.mem.write32(nreadOut, total);
+        return 0;
+      };
+      wasi.fd_seek = (fd, offset, whence, newOffsetOut) => {
+        const f = open.get(fd);
+        if (!f) return base.fd_seek(fd, offset, whence, newOffsetOut);
+        const off = Number(offset);
+        // wasi_unstable: 0 = from current, 1 = from end, 2 = from start
+        const pos = whence === 0 ? f.pos + off : whence === 1 ? f.data.length + off : off;
+        if (pos < 0) return EINVAL;
+        f.pos = pos;
+        this.mem.check();
+        new DataView(this.mem.buffer).setBigUint64(newOffsetOut, BigInt(pos), true);
+        return 0;
+      };
+      wasi.fd_tell = (fd, offsetOut) => {
+        const f = open.get(fd);
+        if (!f) return base.fd_tell ? base.fd_tell(fd, offsetOut) : EBADF;
+        this.mem.check();
+        new DataView(this.mem.buffer).setBigUint64(offsetOut, BigInt(f.pos), true);
+        return 0;
+      };
+      wasi.fd_close = (fd) => {
+        if (!open.has(fd)) return base.fd_close(fd);
+        open.delete(fd);
+        return 0;
+      };
+      wasi.fd_fdstat_get = (fd, out) => {
+        if (!open.has(fd)) return base.fd_fdstat_get(fd, out);
+        this.mem.check();
+        const dv = new DataView(this.mem.buffer);
+        dv.setUint8(out, 4);            // regular file
+        dv.setUint16(out + 2, 0, true); // flags
+        dv.setBigUint64(out + 8, 0xFFFFFFFFn, true);
+        dv.setBigUint64(out + 16, 0xFFFFFFFFn, true);
+        return 0;
+      };
+      wasi.fd_filestat_get = (fd, out) => {
+        const f = open.get(fd);
+        if (!f) return base.fd_filestat_get(fd, out);
+        this.mem.check();
+        const dv = new DataView(this.mem.buffer);
+        for (let i = 0; i < 56; i += 8) dv.setBigUint64(out + i, 0n, true);
+        dv.setUint8(out + 16, 4);
+        dv.setUint32(out + 20, 1, true);
+        dv.setBigUint64(out + 24, BigInt(f.data.length), true);
+        return 0;
+      };
+    }
 
     environ_sizes_get(countOut, sizeOut) {
       this.mem.check();

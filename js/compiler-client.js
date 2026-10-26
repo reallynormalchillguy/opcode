@@ -68,7 +68,7 @@
     });
   }
 
-  // opts: { stdin, timeoutMs, onOutput(text, fd) }
+  // opts: { stdin, timeoutMs, onOutput(text, fd), files: { name: Uint8Array } }
   function run(wasm, opts = {}) {
     stop();
     return new Promise((resolve) => {
@@ -94,7 +94,7 @@
         }
       };
       w.onerror = (e) => finish({ exitCode: null, trap: e.message || 'The program crashed' });
-      w.postMessage({ memfsModule, wasm, stdin: opts.stdin || '' });
+      w.postMessage({ memfsModule, wasm, stdin: opts.stdin || '', files: opts.files || {} });
     });
   }
 

@@ -398,6 +398,20 @@ a.map-item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .mm-block.cart { background: #e0b860; }
 .mm-block.mirror { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.45) 0 3px, transparent 3px 7px); }
 
+/* 6502 opcode tables (lessons and exercise prompts) */
+.op-table-wrap { overflow-x: auto; margin: 0.4rem 0 0.8rem; }
+.op-table { border-collapse: collapse; font-size: 0.82rem; white-space: nowrap; }
+.op-table th, .op-table td { padding: 0.3rem 0.55rem; border-bottom: 1px solid var(--ridge); text-align: left; }
+.op-table thead th, .op-table tr:first-child th { font-family: var(--mono); font-weight: 500; font-size: 0.74rem; color: var(--ink-2); }
+.op-table tr:first-child th:first-child { font-family: var(--font); }
+.op-table tbody th, .op-table tr + tr th { font-family: var(--mono); font-weight: 600; }
+.op-table td code { background: none; padding: 0; font-weight: 600; }
+.op-cyc { margin-left: 0.3rem; font-size: 0.72rem; color: var(--ink-2); }
+.ex-prompt .op-table th, .ex-prompt .op-table td { border-bottom-color: var(--strip-line); }
+.ex-prompt .op-table tr:first-child th { color: var(--strip-muted); }
+.ex-prompt .op-table td code { background: none; }
+.ex-prompt .op-cyc { color: var(--strip-muted); }
+
 /* Quizzes */
 .quiz { margin: 1.7rem 0; padding: 1.1rem 1.25rem; border: 1px solid var(--ridge); border-radius: var(--r-l); max-width: 36em; }
 .quiz-q { font-weight: 650; margin-bottom: 0.75rem !important; }
@@ -498,7 +512,8 @@ a.map-item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
   border-radius: var(--r-s);
   font-size: 0.86rem;
   line-height: 1.5;
-  white-space: pre-wrap;
+  white-space: pre;
+  overflow-x: auto;
 }
 .ex-prompt code { font-size: 0.88em; background: #404046; padding: 0.05em 0.3em; border-radius: 3px; }
 .ex-prompt pre code { background: none; padding: 0; }
