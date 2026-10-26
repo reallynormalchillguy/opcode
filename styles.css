@@ -215,7 +215,9 @@ a.map-item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .map-toggle-icon { display: grid; gap: 3px; width: 0.9rem; }
 .map-toggle-icon i { display: block; height: 2px; border-radius: 1px; background: currentColor; }
 
-.lesson-body { max-width: 46rem; padding: 1rem clamp(1.5rem, 4vw, 3.5rem) 6rem; margin: 0 auto 0 0; }
+/* Centred in the lesson column, so the text sits between the course map and
+   the workbench instead of against the left edge. */
+.lesson-body { max-width: 44rem; padding: 1rem clamp(1.5rem, 4vw, 3.5rem) 6rem; margin: 0 auto; }
 .lesson-kicker { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--ink-2); }
 .lesson-title {
   margin: 0;
