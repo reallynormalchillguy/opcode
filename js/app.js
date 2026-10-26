@@ -744,7 +744,27 @@
     const missing = [...new Set([...String(diag).matchAll(/undefined symbol: (\w+)/g)].map((m) => m[1]))];
     if (missing.length) {
       const names = missing.map((n) => `<code>${H.esc(n)}</code>`).join(', ');
-      return `Every file compiled, but nothing defines ${names}. Write ${missing.length > 1 ? 'them' : 'it'} with exactly that name, and make sure it is not <code>static</code>.`;
+      let advice = `Every file compiled, but nothing defines ${names}. Write ${missing.length > 1 ? 'them' : 'it'} with exactly that name, and make sure it is not <code>static</code>.`;
+      // In the emulator project, a missing function is usually one an earlier
+      // exercise added: the learner skipped it, so their file is older.
+      const ex = current.exercise;
+      if (isProject(ex)) {
+        const owners = new Set();
+        for (const sym of missing) {
+          const def = new RegExp(`^[\\w \\*]*\\b${sym}\\s*\\([^;]*$`, 'm');
+          for (const [name, spec] of Object.entries(ex.project.learner || {})) {
+            const ref = (ex.solution && ex.solution[name]) || spec.starter;
+            if (ref && def.test(ref)) owners.add(name);
+          }
+        }
+        if (owners.size) {
+          const list = [...owners].map((n) => `<code>${H.esc(n)}</code>`);
+          const files = list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}` : list[0];
+          const yours = owners.size > 1 ? 'yours are probably from earlier lessons' : 'yours is probably from an earlier lesson';
+          advice += ` The course's ${files} ${owners.size > 1 ? 'have' : 'has'} ${missing.length > 1 ? 'them' : 'it'}, so ${yours} (that happens when you skip exercises). Open the file and press Reset to get the course's version, or press Solution and then <strong>Use the course's version of every file</strong>.`;
+        }
+      }
+      return advice;
     }
     return 'The program could not be linked. Check the names and parameters of the functions you call.';
   }
@@ -881,6 +901,22 @@
       saveWork();
     });
     box.appendChild(use);
+    if (isProject(ex)) {
+      // Brings every file of the project up to this exercise: the learner's
+      // other files may be from earlier lessons if they skipped some.
+      const all = el('button', { class: 'btn ghost', type: 'button' }, 'Use the course\'s version of every file');
+      all.addEventListener('click', () => {
+        const names = Object.keys(ex.project.learner || {});
+        if (!confirm(`Replace all your project files (${names.join(', ')}) with the course's versions, solved up to and including this exercise? Your own code in them will be lost. Download the project first if you want to keep it.`)) return;
+        for (const name of names) {
+          const text = ex.solution && ex.solution[name] != null ? ex.solution[name] : ex.project.learner[name].starter;
+          if (current.docs[name]) current.docs[name].setValue(text);
+        }
+        saveWork();
+        consoleNote('Every project file is now the course\'s version. Press Run.', 'project');
+      });
+      box.appendChild(all);
+    }
   }
 
   function resetCode() {
