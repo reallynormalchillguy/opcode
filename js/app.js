@@ -510,10 +510,36 @@
     return out;
   }
 
+  // In an emulator project, a file can include a header this exercise does
+  // not list: the learner went back to an older exercise with newer files
+  // (bus.c from lesson 20 includes controller.h). Add what the includes
+  // need: the newest course header, and the learner's .c file of the same
+  // name if the project has one (or the course's, like palette.c).
+  function addProjectDependencies(ex, files) {
+    const fallback = (ex.project && ex.project.fallback) || {};
+    const mine = Progress.projectFiles();
+    const queue = Object.keys(files);
+    while (queue.length) {
+      const text = files[queue.shift()] || '';
+      for (const m of text.matchAll(/#include\s+"([\w.]+)\.h"/g)) {
+        const base = m[1];
+        for (const name of [`${base}.h`, `${base}.c`]) {
+          if (name in files) continue;
+          const found = name in mine ? mine[name] : fallback[name];
+          if (found == null) continue;
+          files[name] = found;
+          queue.push(name);
+        }
+      }
+    }
+    return files;
+  }
+
   async function buildCurrent(forCheck) {
     if (Compiler.status.state !== 'ready') consoleNote('Waiting for the compiler to finish downloading…', 'muted');
     const t = consoleNote('Compiling…', 'muted');
     const plan = forCheck ? Checker.checkBuild(current.exercise, currentFiles()) : { files: currentFiles(), options: {} };
+    if (isProject(current.exercise)) addProjectDependencies(current.exercise, plan.files);
     const r = await Compiler.build(plan.files, plan.options);
     t.remove();
     return r;
@@ -638,8 +664,25 @@
 
   /* ---------- Cartridge picker ---------- */
 
-  const BUILT_IN_ROMS = { 'nestest.nes': 'nes/nestest.nes' };
+  const BUILT_IN_ROMS = { 'opcode-demo.nes': 'nes/opcode-demo.nes', 'nestest.nes': 'nes/nestest.nes' };
   const LOAD_OPTION = '__load__';
+
+  // Exercises suggest a built-in cartridge (ex.rom is its name; true means
+  // nestest). The learner's choice is remembered per suggestion, so picking
+  // a game in one lesson does not change what another lesson starts with.
+  const suggestedRom = (ex) => (typeof ex.rom === 'string' ? ex.rom : 'nestest.nes');
+  function chosenRom(ex) {
+    const s = suggestedRom(ex);
+    const saved = (prefs.roms && prefs.roms[s]) || (s === 'nestest.nes' ? prefs.rom : null);
+    return saved || `builtin:${s}`;
+  }
+  function rememberRom(v) {
+    const ex = current.exercise;
+    if (!ex || !ex.rom) return;
+    prefs.roms = prefs.roms || {};
+    prefs.roms[suggestedRom(ex)] = v;
+    savePrefs();
+  }
 
   async function renderRomPicker() {
     const ex = current.exercise;
@@ -648,16 +691,16 @@
     if (row.hidden) return;
     const select = $('#rom-select');
     const mine = await RomStore.list();
-    const chosen = prefs.rom || 'builtin:nestest.nes';
+    const chosen = chosenRom(ex);
     select.innerHTML = '';
     for (const name of Object.keys(BUILT_IN_ROMS)) select.appendChild(el('option', { value: `builtin:${name}` }, `${H.esc(name)} (comes with the course)`));
     for (const name of mine) select.appendChild(el('option', { value: `mine:${name}` }, H.esc(name)));
     select.appendChild(el('option', { value: LOAD_OPTION }, 'Load a .nes file from your computer…'));
-    select.value = [...select.options].some((o) => o.value === chosen) ? chosen : 'builtin:nestest.nes';
+    select.value = [...select.options].some((o) => o.value === chosen) ? chosen : `builtin:${suggestedRom(ex)}`;
   }
 
   async function currentRom() {
-    const v = $('#rom-select').value || 'builtin:nestest.nes';
+    const v = $('#rom-select').value || `builtin:${suggestedRom(current.exercise)}`;
     if (v.startsWith('builtin:')) {
       const name = v.slice(8);
       return (await loadData({ data: { [name]: BUILT_IN_ROMS[name] } }))[name];
@@ -672,8 +715,7 @@
       renderRomPicker();
       return;
     }
-    prefs.rom = v;
-    savePrefs();
+    rememberRom(v);
   });
 
   $('#rom-file').addEventListener('change', async () => {
@@ -686,8 +728,7 @@
       return;
     }
     await RomStore.put(file.name, bytes);
-    prefs.rom = `mine:${file.name}`;
-    savePrefs();
+    rememberRom(`mine:${file.name}`);
     await renderRomPicker();
     consoleNote(`${H.esc(file.name)} is loaded and stays in this browser. Press Run to use it.`, 'project');
   });

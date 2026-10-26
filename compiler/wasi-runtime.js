@@ -173,7 +173,10 @@
   // One running WASI program (clang, lld, or the learner's program).
   class App {
     // dataFiles: { 'name': Uint8Array } read-only files the program can fopen.
-    constructor(module, memfs, argv, extraImports = {}, dataFiles = null) {
+    // terminal: report stdout and stderr as a terminal, so C flushes stdout
+    // at every newline (otherwise it waits until exit, and output printed in
+    // a screen_loop frame would never appear).
+    constructor(module, memfs, argv, extraImports = {}, dataFiles = null, terminal = false) {
       this.argv = argv;
       this.environ = { USER: 'opcode' };
       this.memfs = memfs;
@@ -183,6 +186,19 @@
       ]);
       Object.assign(wasi, memfs.exports);
       if (dataFiles && Object.keys(dataFiles).length) this.addDataFiles(wasi, dataFiles);
+      if (terminal) {
+        const fdstat = wasi.fd_fdstat_get;
+        wasi.fd_fdstat_get = (fd, out) => {
+          if (fd !== 1 && fd !== 2) return fdstat(fd, out);
+          this.mem.check();
+          const dv = new DataView(this.mem.buffer);
+          dv.setUint8(out, 2);              // character device
+          dv.setUint16(out + 2, 0, true);   // flags
+          dv.setBigUint64(out + 8, 0x40n, true);  // rights: write only (no seek or tell: a terminal)
+          dv.setBigUint64(out + 16, 0n, true);
+          return 0;
+        };
+      }
       const imports = { wasi_unstable: wasi, env: extraImports };
       this.ready = WebAssembly.instantiate(module, imports).then((instance) => {
         this.instance = instance;

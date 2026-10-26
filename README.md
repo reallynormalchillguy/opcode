@@ -84,14 +84,28 @@ The CPU lessons (13 to 15) are generated from a reference implementation:
   `lessons/cpu-data.js`. Run it after changing anything in that folder, then
   `node tests/lessons.test.js` to check the same in the browser compiler.
 
-## The reference cartridge and PPU (tools/refnes)
+## The reference cartridge, PPU and controllers (tools/refnes)
 
-Lessons 16 to 18 work the same way. `cart.staged.c`, `bus.staged.c` and
-`ppu.staged.c` hold a reference cartridge (iNES, mapper 0), bus and PPU with
-`//@ N` markers for exercise stages 13-21; `course/` holds the programs the
-course provides (shown read-only to the learner) and `harness/` the hidden
-test programs. `python3 build.py` compiles every stage with gcc, runs the
-tests and writes `lessons/nes-data.js`.
+Lessons 16 to 21 work the same way. `cart.staged.c`, `bus.staged.c`,
+`ppu.staged.c` and `controller.staged.c` hold a reference cartridge (iNES,
+mapper 0), bus, PPU (background, sprites, sprite 0 hit, loopy scrolling) and
+controllers with `//@ N` markers for exercise stages 13-29. Headers that grew
+during the course (`bus.h`, `ppu.h`) and the course's `nes.c` are staged the
+same way; a header version is stored as `bus.h@22` (from stage 22 on).
+`course/` holds the programs the course provides (shown read-only to the
+learner) and `harness/` the hidden test programs (`.inc` files are inlined).
+`python3 build.py` compiles every stage with gcc, runs the tests and writes
+`lessons/nes-data.js`.
+
+## The demo cartridge (tools/demo)
+
+`nes/opcode-demo.nes` is a small game written for the course in 6502
+assembly (`demo.s`): a robot walks and jumps through a two-screen level,
+with a status bar split with sprite 0. `art.py` holds its tiles, palettes
+and level. `tools/asm6502.py` is the course's own small assembler (built on
+the opcode table in `tools/ref6502`). Rebuild it with
+`python3 tools/demo/build_demo.py`, then run `tools/refnes/build.py`, whose
+tests use it.
 
 ## The screen
 
@@ -107,6 +121,7 @@ learner presses Stop. Frames are shown over the lesson column.
   (Apache 2.0, LLVM licence: `compiler/LICENSE.*`).
 - [CodeMirror 5](https://codemirror.net/5/) (MIT).
 - Fonts: Archivo and IBM Plex Mono (SIL Open Font License).
+- `nes/opcode-demo.nes`: made for this course (`tools/demo`).
 - `nes/nestest.nes`, its documentation and log: nestest by Kevin Horton,
   freely distributed for testing emulators. `nes/nestest-official.log` is
   the official-instruction part of the log, reformatted.

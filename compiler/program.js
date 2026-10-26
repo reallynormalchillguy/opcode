@@ -72,7 +72,7 @@
     memfs.setStdin(stdin);
     try {
       const module = wasm instanceof WebAssembly.Module ? wasm : await WebAssembly.compile(wasm);
-      app = new App(module, memfs, argv, env, files);
+      app = new App(module, memfs, argv, env, files, true);
       await app.ready;
     } catch (e) {
       return { exitCode: null, trap: 'The program could not be started: ' + (e && e.message), stdout, stderr, truncated };

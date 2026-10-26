@@ -467,6 +467,18 @@ a.map-item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
   color: rgba(255,255,255,.85);
 }
 .swatch.light { color: rgba(0,0,0,.7); }
+/* One sprite's four bytes, and the fields of a loopy register. */
+.byte-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; max-width: 34rem; }
+.byte-cell { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.6rem 0.7rem; border-radius: var(--r-s); background: var(--plastic-hi); border: 1px solid var(--ridge); }
+.byte-cell b { font-family: var(--mono); font-weight: 500; font-size: 0.72rem; color: var(--ink-2); }
+.byte-cell span { font-weight: 700; }
+.byte-cell small { font-size: 0.78rem; color: var(--ink-2); line-height: 1.35; }
+.bit-groups { display: flex; gap: 4px; flex-wrap: wrap; max-width: 40rem; }
+.bit-group { flex: var(--w, 1); min-width: 6.5rem; display: flex; flex-direction: column; gap: 0.15rem; padding: 0.55rem 0.7rem; border-radius: var(--r-s); color: #fff; }
+.bit-group .bits { font-family: var(--mono); font-size: 1.05rem; letter-spacing: 0.12em; }
+.bit-group b { font-size: 0.85rem; }
+.bit-group small { font-size: 0.75rem; opacity: 0.85; line-height: 1.35; }
+.g-fy { --w: 3; background: #6f8fc8; } .g-nt { --w: 2; background: #c8102e; } .g-cy { --w: 5; background: #2c7448; } .g-cx { --w: 5; background: #8a6d1f; }
 .attr-fig { display: flex; gap: 1.4rem; align-items: center; flex-wrap: wrap; }
 .attr-block { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 11rem; flex: none; }
 .attr-block .q {

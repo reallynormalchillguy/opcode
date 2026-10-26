@@ -28,7 +28,8 @@ require(path.join(dir, 'program.js'));
     if (r.diagnostics) console.log(JSON.stringify(r.diagnostics));
     if (r.ok) {
       const out = await OpcodeProgram.runProgram({ memfsModule: tc.memfsModule, wasm: r.wasm, stdin: c.stdin });
-      console.log(JSON.stringify(out));
+      const { app, ...shown } = out;  // app is the running program: too big to print
+      console.log(JSON.stringify(shown));
     }
   }
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -19,10 +19,22 @@ void ppu_write(uint16_t addr, uint8_t value);
 // Row `row` (0-7) of tile `tile` in the pattern table at `table` (0x0000 or
 // 0x1000), as eight colour numbers 0-3, left to right.
 void ppu_tile_row(uint16_t table, uint8_t tile, int row, uint8_t out[8]);
+//@ 23
+
+// The sprites on scanline y: the numbers (0-63) of the first eight go into
+// found, in OAM order. Returns how many there are in all, which can be more
+// than 8.
+int ppu_sprites_on_line(int y, uint8_t found[8]);
+//@ end
 
 // The eight registers the CPU sees at 2000-2007. reg is 0 to 7.
 uint8_t ppu_register_read(int reg);
 void ppu_register_write(int reg, uint8_t value);
+//@ 28
+
+// The scroll registers: v, t, fine x and the write toggle w.
+void ppu_scroll_regs(uint16_t *v, uint16_t *t, uint8_t *fine_x, int *w);
+//@ end
 
 // Advance the PPU by one dot.
 void ppu_tick(void);
