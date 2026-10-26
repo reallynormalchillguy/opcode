@@ -664,7 +664,14 @@
 
   /* ---------- Cartridge picker ---------- */
 
-  const BUILT_IN_ROMS = { 'opcode-demo.nes': 'nes/opcode-demo.nes', 'nestest.nes': 'nes/nestest.nes' };
+  const BUILT_IN_ROMS = {
+    'opcode-demo.nes': 'nes/opcode-demo.nes',
+    'opcode-uxrom.nes': 'nes/opcode-uxrom.nes',
+    'opcode-cnrom.nes': 'nes/opcode-cnrom.nes',
+    'opcode-mmc1.nes': 'nes/opcode-mmc1.nes',
+    'opcode-mmc3.nes': 'nes/opcode-mmc3.nes',
+    'nestest.nes': 'nes/nestest.nes',
+  };
   const LOAD_OPTION = '__load__';
 
   // Exercises suggest a built-in cartridge (ex.rom is its name; true means

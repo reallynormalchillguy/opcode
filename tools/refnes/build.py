@@ -1,10 +1,10 @@
-"""Builds lessons/nes-data.js for lessons 16-21 (cartridge, PPU, sprites,
-controllers and scrolling).
+"""Builds lessons/nes-data.js for lessons 16-22 (cartridge, PPU, sprites,
+controllers, scrolling and mappers).
 
   python3 build.py
 
 Cuts the staged reference files into the learner files of every exercise
-stage (13-29, continuing the CPU's 1-12), compiles each stage natively with
+stage (13-34, continuing the CPU's 1-12), compiles each stage natively with
 its test program, runs the tests to get the expected output, and writes
 everything the lessons need. Run tests/lessons.test.js afterwards to check
 the same in the browser's compiler.
@@ -22,7 +22,8 @@ from gen_trace import TRACE_H, trace_c
 from gen_main import NESTEST_MAIN
 
 STAGED = {name: open(name + '.staged.c').read() for name in ('cart', 'bus', 'ppu', 'controller')}
-CPU_C = stage(open('../ref6502/cpu.staged.c').read(), 11)
+CPU_STAGED = open('../ref6502/cpu.staged.c').read()
+CPU_C = stage(CPU_STAGED, 11)
 OLD_BUS_C = open('../ref6502/bus.c').read()
 
 SKELETON = {
@@ -35,7 +36,7 @@ SKELETON = {
 def learner(name, n):
     """The learner's file `name` after exercise stage n."""
     if name == 'cpu.c':
-        return CPU_C
+        return CPU_C if n < 34 else stage(CPU_STAGED, n)
     if name == 'cart.c':
         return SKELETON['cart'] if n < 13 else stage(STAGED['cart'], n)
     if name == 'ppu.c':
@@ -83,8 +84,8 @@ def nestest_cart():
 # Headers that grew during the course are staged too. The version a stage
 # sees is called 'bus.h@22' (bus.h from stage 22 on); the first one keeps
 # the plain name.
-STAGED_HEADERS = {'bus.h': [15, 22], 'ppu.h': [16, 23, 28]}
-HEADERS = {n: open(n).read() for n in ('cpu.h', 'cart.h', 'palette.h', 'screen.h', 'controller.h')}
+STAGED_HEADERS = {'bus.h': [15, 22], 'ppu.h': [16, 23, 28], 'cart.h': [13, 31, 33], 'cpu.h': [15, 34]}
+HEADERS = {n: open(n).read() for n in ('palette.h', 'screen.h', 'controller.h')}
 for _name, _starts in STAGED_HEADERS.items():
     for _i, _n in enumerate(_starts):
         HEADERS[_name if _i == 0 else '%s@%d' % (_name, _n)] = stage(open(_name).read(), _n)
@@ -119,6 +120,11 @@ MAINS = {
     27: course_program('nes.c', 27),
     28: course_program('scrollmon.c', 28),
     29: course_program('nes.c', 29),
+    30: course_program('nes.c', 30),
+    31: course_program('nes.c', 31),
+    32: course_program('nes.c', 32),
+    33: course_program('irqmon.c', 33),
+    34: course_program('nes.c', 34),
 }
 
 NES = ['cpu.h', 'bus.h', 'cart.h', 'ppu.h', 'palette.h', 'palette.c', 'screen.h']
@@ -151,6 +157,16 @@ STAGES = {
     28: dict(course=NES + ['controller.h'], learner=EMU + ['controller.c'], changes=['ppu.c'], harness='h28', tests=[1, 2, 3, 4, 5]),
     29: dict(course=NES + ['controller.h'], learner=EMU + ['controller.c'], changes=['ppu.c'], harness='h29',
              tests=[1, 2, 3, 4, 5, 6], data=DEMO),
+    30: dict(course=NES + ['controller.h'], learner=['cart.c', 'ppu.c', 'bus.c', 'cpu.c', 'controller.c'], changes=['cart.c'],
+             harness='h30', tests=[1, 2, 3, 4, 5]),
+    31: dict(course=NES + ['controller.h'], learner=['cart.c', 'ppu.c', 'bus.c', 'cpu.c', 'controller.c'], changes=['cart.c', 'ppu.c'],
+             harness='h31', tests=[1, 2, 3, 4, 5]),
+    32: dict(course=NES + ['controller.h'], learner=['cart.c', 'ppu.c', 'bus.c', 'cpu.c', 'controller.c'], changes=['cart.c'],
+             harness='h32', tests=[1, 2, 3, 4]),
+    33: dict(course=NES + ['controller.h'], learner=['cart.c', 'ppu.c', 'bus.c', 'cpu.c', 'controller.c'], changes=['cart.c', 'ppu.c'],
+             harness='h33', tests=[1, 2, 3, 4, 5]),
+    34: dict(course=NES + ['controller.h'], learner=['cpu.c', 'cart.c', 'ppu.c', 'bus.c', 'controller.c'], changes=['cpu.c'],
+             harness='h34', tests=[1, 2, 3, 4], data=['opcode-mmc3.nes']),
 }
 
 SCREEN_STUB = '#include "screen.h"\nvoid screen_show(const uint32_t *p) { (void)p; }\nvoid screen_loop(void (*f)(void)) { (void)f; }\nuint8_t screen_buttons(void) { return 0; }\n'
@@ -166,7 +182,7 @@ def run(cmd, **kw):
 
 def main():
     tmp = tempfile.mkdtemp()
-    for rom in ('nestest.nes', 'opcode-demo.nes'):
+    for rom in ('nestest.nes', 'opcode-demo.nes', 'opcode-mmc3.nes'):
         open(os.path.join(tmp, rom), 'wb').write(open(os.path.join(ROOT, 'nes', rom), 'rb').read())
     open(os.path.join(tmp, 'nestest.log'), 'w').write(open(os.path.join(ROOT, 'nes', 'nestest-official.log')).read())
     out = {'headers': HEADERS, 'stages': {}, 'busBefore': OLD_BUS_C}

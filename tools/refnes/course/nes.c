@@ -39,6 +39,11 @@ static void run_frame(void) {
         if (ppu_take_nmi()) {
             cpu_nmi(&cpu);
         }
+//@ 34
+        if (cart_irq()) {
+            cpu_irq(&cpu);                      // taken only if the game has interrupts on
+        }
+//@ end
         if (ppu_take_frame()) {
             break;
         }

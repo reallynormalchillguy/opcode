@@ -279,6 +279,20 @@ void cpu_nmi(Cpu *cpu) {
     cpu->cycles += 7;
 }
 //@ end
+//@ 34
+
+int cpu_irq(Cpu *cpu) {
+    if (cpu->p & FLAG_I) {                          // interrupts are off: the IRQ waits
+        return 0;
+    }
+    push16(cpu, cpu->pc);
+    push(cpu, (uint8_t)((cpu->p & ~FLAG_B) | FLAG_U));
+    cpu->p |= FLAG_I;
+    cpu->pc = bus_read16(0xFFFE);
+    cpu->cycles += 7;
+    return 1;
+}
+//@ end
 
 // ---------- One instruction ----------
 

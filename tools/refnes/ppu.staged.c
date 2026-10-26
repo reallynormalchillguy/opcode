@@ -109,11 +109,29 @@ static uint16_t nametable_index(uint16_t addr) {
     uint16_t offset = (addr - 0x2000) & 0x0FFF;   // 0000-0FFF: four 1 KB tables
     int table = offset / 0x400;                   // 0, 1, 2 or 3
     int physical;
+//@ 16-30
     if (cart_mirroring() == MIRROR_VERTICAL) {
         physical = table & 1;                     // 0 1 / 0 1
     } else {
         physical = table >> 1;                    // 0 0 / 1 1
     }
+//@ end
+//@ 31
+    switch (cart_mirroring()) {
+    case MIRROR_VERTICAL:
+        physical = table & 1;                     // 0 1 / 0 1
+        break;
+    case MIRROR_HORIZONTAL:
+        physical = table >> 1;                    // 0 0 / 1 1
+        break;
+    case MIRROR_ONE_LOW:
+        physical = 0;                             // 0 0 / 0 0
+        break;
+    default:
+        physical = 1;                             // 1 1 / 1 1
+        break;
+    }
+//@ end
     return (uint16_t)(physical * 0x400 + (offset & 0x3FF));
 }
 
@@ -568,6 +586,13 @@ void ppu_tick(void) {
 //@ 29
     // While the picture is drawn, v moves along with it.
     if ((mask & 0x18) && (scanline < PPU_HEIGHT || scanline == 261)) {
+//@ end
+//@ 33
+        if (dot == 260) {
+            cart_scanline();                        // MMC3 counts scanlines here
+        }
+//@ end
+//@ 29
         if (dot == 256) {
             increment_y();                          // the next row of pixels
         } else if (dot == 257) {                    // back to the left: the horizontal bits of t

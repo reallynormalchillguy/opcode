@@ -31,5 +31,11 @@ int cpu_step(Cpu *cpu);
 
 // Interrupt the CPU with an NMI (the PPU does this every frame).
 void cpu_nmi(Cpu *cpu);
+//@ 34
+
+// Interrupt the CPU with an IRQ, unless the I flag is set. Returns 1 if the
+// CPU took it.
+int cpu_irq(Cpu *cpu);
+//@ end
 
 #endif
