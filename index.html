@@ -53,6 +53,18 @@
       <div id="lesson-content"></div>
     </main>
 
+    <div class="tv" id="screen-wrap" hidden>
+      <div class="tv-frame" role="region" aria-label="Your program's picture">
+        <div class="tv-bar">
+          <span class="tv-led" id="tv-led" aria-hidden="true"></span>
+          <span class="tv-title">Screen</span>
+          <span class="tv-help">Click the picture to play: arrows, <kbd>X</kbd> A, <kbd>Z</kbd> B, <kbd>Enter</kbd> Start, <kbd>Shift</kbd> Select</span>
+          <button class="btn small" id="btn-tv-close" type="button">Back to the lesson</button>
+        </div>
+        <canvas id="screen" width="256" height="240" tabindex="0" aria-label="The program's picture. Click it to use the keyboard as a controller."></canvas>
+      </div>
+    </div>
+
     <section class="bench" id="bench" aria-label="Exercise workbench">
       <header class="bench-head">
         <div class="ex-switch-row">
@@ -74,6 +86,7 @@
             <button class="btn ghost" id="btn-hint">Hint</button>
             <button class="btn ghost" id="btn-solution">Solution</button>
             <button class="btn ghost" id="btn-download" title="Download every file of your emulator project as a .zip" hidden>Download</button>
+            <button class="btn ghost" id="btn-tv-open" type="button" hidden>Screen</button>
           </div>
           <button class="btn" id="btn-run" title="Run (Ctrl+Enter)">Run</button>
           <button class="btn primary" id="btn-check" title="Check (Ctrl+Shift+Enter)">Check</button>
@@ -83,6 +96,11 @@
       <div class="splitter" id="splitter" role="separator" aria-orientation="horizontal" aria-label="Resize the editor and the console" tabindex="0"></div>
 
       <div class="pane out-pane">
+        <div class="io rom-row" id="rom-row" hidden>
+          <label class="io-label" for="rom-select">Cartridge</label>
+          <select id="rom-select" class="rom-select"></select>
+          <input type="file" id="rom-file" accept=".nes,application/octet-stream" hidden>
+        </div>
         <div class="io">
           <label class="io-label" for="stdin">Program input</label>
           <textarea id="stdin" class="stdin" rows="1" spellcheck="false" placeholder="What your program reads with scanf"></textarea>
@@ -120,6 +138,11 @@
   <script src="lessons/nes-cpu-bus.js"></script>
   <script src="lessons/nes-cpu-modes.js"></script>
   <script src="lessons/nes-cpu-ops.js"></script>
+  <script src="lessons/nes-data.js"></script>
+  <script src="lessons/nes-common.js"></script>
+  <script src="lessons/nes-cart.js"></script>
+  <script src="lessons/nes-ppu-tiles.js"></script>
+  <script src="lessons/nes-ppu-bg.js"></script>
 
   <script src="js/checker.js"></script>
   <script src="js/highlight.js"></script>
@@ -127,6 +150,7 @@
   <script src="js/compiler-client.js"></script>
   <script src="js/console.js"></script>
   <script src="js/zip.js"></script>
+  <script src="js/roms.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

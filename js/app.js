@@ -406,6 +406,16 @@
       if (how === 'imported') consoleNote(`<strong>${H.esc(name)}</strong> was added to your emulator project, starting from your own solution to “${H.esc(exerciseTitle(from.exercise))}”.`, 'project');
       else consoleNote(`<strong>${H.esc(name)}</strong> was added to your emulator project.`, 'project');
     }
+    if (isProject(ex)) {
+      const here = new Set(Object.keys(ex.project.learner || {}));
+      const later = Object.keys(Progress.projectFiles()).filter((n) => !here.has(n));
+      if (later.length) {
+        consoleNote(`Your project has grown since this exercise (it now also has ${later.map((n) => `<code>${H.esc(n)}</code>`).join(', ')}). The files shown here are your latest versions, so this older exercise may no longer build or pass. That is expected.`, 'muted');
+      }
+    }
+    hideScreen();
+    $('.tv-help').hidden = !ex.controller;
+    renderRomPicker();
     consoleNote(Progress.isSolved(ex.id)
       ? 'You have already solved this one. Run and Check still work if you want to experiment.'
       : 'Write your code, then press Run to try it or Check to test it.');
@@ -459,6 +469,7 @@
   });
 
   function describeExit(res) {
+    if (res.frameStuck) return '<span class="bad">Stopped: one frame took more than 8 seconds. Is there a loop in your emulator that never ends?</span>';
     if (res.timedOut) return `<span class="bad">Stopped after ${res.timeoutMs / 1000} seconds. Is there a loop that never ends?</span>`;
     if (res.stopped) return '<span class="muted">Stopped.</span>';
     if (res.truncated) return '<span class="bad">Stopped: the program printed too much output. Is a loop printing forever?</span>';
@@ -528,16 +539,29 @@
       }
       consoleDiag(r.diagnostics);
       const pre = consoleAppend(el('pre', { class: 'stdout' }));
+      const files = await loadData(current.exercise);
+      if (current.exercise.rom) {
+        const rom = await currentRom();
+        if (rom) files['game.nes'] = rom;
+      }
+      hideScreen();
       const res = await Compiler.run(r.wasm, {
-        files: await loadData(current.exercise),
+        files,
         stdin: $('#stdin').value,
         timeoutMs: 15000,
         onOutput: (text, fd) => {
           if (fd === 2) pre.appendChild(el('span', { class: 'stderr' })).textContent = text;
           else pre.appendChild(document.createTextNode(text));
+          trimConsole(pre);
           $('#console').scrollTop = $('#console').scrollHeight;
         },
+        onFrame: showFrame,
+        onLooping: () => {
+          setTvRunning(true);
+          consoleNote('Running. Press Stop to end it.', 'muted');
+        },
       });
+      setTvRunning(false);
       if (!res.stdout && !res.stderr) pre.remove();
       consoleAppend(el('div', { class: 'exit' }, describeExit(res)));
     } catch (e) {
@@ -546,6 +570,127 @@
       setBusy(false);
     }
   }
+
+  /* ---------- Screen and controller ---------- */
+
+  const screenCanvas = $('#screen');
+  const screenCtx = screenCanvas.getContext('2d');
+  let screenImage = null;
+
+  let screenDismissed = false; // the learner went back to the lesson during this run
+
+  function hideScreen() {
+    $('#screen-wrap').hidden = true;
+    $('#btn-tv-open').hidden = true;
+    screenDismissed = false;
+  }
+
+  function showFrame(rgba) {
+    if (!screenImage) screenImage = screenCtx.createImageData(256, 240);
+    screenImage.data.set(rgba);
+    screenCtx.putImageData(screenImage, 0, 0);
+    $('#btn-tv-open').hidden = false;
+    if (!screenDismissed) $('#screen-wrap').hidden = false;
+  }
+
+  $('#btn-tv-close').addEventListener('click', () => {
+    screenDismissed = true;
+    $('#screen-wrap').hidden = true;
+  });
+  $('#btn-tv-open').addEventListener('click', () => {
+    screenDismissed = false;
+    $('#screen-wrap').hidden = false;
+    screenCanvas.focus();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#screen-wrap').hidden) $('#btn-tv-close').click();
+  });
+
+  // Long-running programs can print a lot: keep only the end of it on screen.
+  function trimConsole(pre) {
+    const MAX = 60000;
+    if (pre.textContent.length > MAX * 1.5) pre.textContent = '…\n' + pre.textContent.slice(-MAX);
+  }
+
+  // NES controller bits: A, B, Select, Start, Up, Down, Left, Right.
+  const KEY_BITS = {
+    KeyX: 0x01, KeyK: 0x01, KeyZ: 0x02, KeyJ: 0x02, ShiftLeft: 0x04, ShiftRight: 0x04, Enter: 0x08,
+    ArrowUp: 0x10, KeyW: 0x10, ArrowDown: 0x20, KeyS: 0x20, ArrowLeft: 0x40, KeyA: 0x40, ArrowRight: 0x80, KeyD: 0x80,
+  };
+  let buttons = 0;
+  function setKey(e, down) {
+    const bit = KEY_BITS[e.code];
+    if (!bit) return;
+    e.preventDefault();
+    buttons = down ? buttons | bit : buttons & ~bit;
+    Compiler.setButtons(buttons);
+  }
+  screenCanvas.addEventListener('keydown', (e) => setKey(e, true));
+  screenCanvas.addEventListener('keyup', (e) => setKey(e, false));
+  screenCanvas.addEventListener('focus', () => $('#screen-wrap').classList.add('playing'));
+  const setTvRunning = (on) => $('#screen-wrap').classList.toggle('running', on);
+  screenCanvas.addEventListener('blur', () => {
+    $('#screen-wrap').classList.remove('playing');
+    buttons = 0;
+    Compiler.setButtons(0);
+  });
+  screenCanvas.addEventListener('click', () => screenCanvas.focus());
+
+  /* ---------- Cartridge picker ---------- */
+
+  const BUILT_IN_ROMS = { 'nestest.nes': 'nes/nestest.nes' };
+  const LOAD_OPTION = '__load__';
+
+  async function renderRomPicker() {
+    const ex = current.exercise;
+    const row = $('#rom-row');
+    row.hidden = !(ex && ex.rom);
+    if (row.hidden) return;
+    const select = $('#rom-select');
+    const mine = await RomStore.list();
+    const chosen = prefs.rom || 'builtin:nestest.nes';
+    select.innerHTML = '';
+    for (const name of Object.keys(BUILT_IN_ROMS)) select.appendChild(el('option', { value: `builtin:${name}` }, `${H.esc(name)} (comes with the course)`));
+    for (const name of mine) select.appendChild(el('option', { value: `mine:${name}` }, H.esc(name)));
+    select.appendChild(el('option', { value: LOAD_OPTION }, 'Load a .nes file from your computer…'));
+    select.value = [...select.options].some((o) => o.value === chosen) ? chosen : 'builtin:nestest.nes';
+  }
+
+  async function currentRom() {
+    const v = $('#rom-select').value || 'builtin:nestest.nes';
+    if (v.startsWith('builtin:')) {
+      const name = v.slice(8);
+      return (await loadData({ data: { [name]: BUILT_IN_ROMS[name] } }))[name];
+    }
+    return RomStore.get(v.slice(5));
+  }
+
+  $('#rom-select').addEventListener('change', () => {
+    const v = $('#rom-select').value;
+    if (v === LOAD_OPTION) {
+      $('#rom-file').click();
+      renderRomPicker();
+      return;
+    }
+    prefs.rom = v;
+    savePrefs();
+  });
+
+  $('#rom-file').addEventListener('change', async () => {
+    const file = $('#rom-file').files[0];
+    $('#rom-file').value = '';
+    if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!RomStore.isINes(bytes)) {
+      consoleNote(`${H.esc(file.name)} is not an iNES file: .nes files start with the bytes <code>4E 45 53 1A</code>.`, 'bad');
+      return;
+    }
+    await RomStore.put(file.name, bytes);
+    prefs.rom = `mine:${file.name}`;
+    savePrefs();
+    await renderRomPicker();
+    consoleNote(`${H.esc(file.name)} is loaded and stays in this browser. Press Run to use it.`, 'project');
+  });
 
   function linkAdvice(diag) {
     const missing = [...new Set([...String(diag).matchAll(/undefined symbol: (\w+)/g)].map((m) => m[1]))];

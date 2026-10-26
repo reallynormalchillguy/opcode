@@ -68,27 +68,47 @@
     });
   }
 
-  // opts: { stdin, timeoutMs, onOutput(text, fd), files: { name: Uint8Array } }
+  // opts: { stdin, timeoutMs, onOutput(text, fd), files: { name: Uint8Array },
+  //         onFrame(rgba, count), onLooping() }
+  // A program that calls screen_loop keeps running until stop() is called;
+  // it is stopped if a single frame takes longer than 8 seconds.
   function run(wasm, opts = {}) {
     stop();
     return new Promise((resolve) => {
       const w = new Worker(BASE + 'run-worker.js');
       let stdout = '';
       let stderr = '';
+      let frames = 0;
+      let watchdog = null;
       const finish = (extra) => {
         clearTimeout(timer);
+        clearTimeout(watchdog);
         w.terminate();
         if (running && running.worker === w) running = null;
-        resolve(Object.assign({ stdout, stderr }, extra));
+        resolve(Object.assign({ stdout, stderr, frames }, extra));
       };
       const timeoutMs = opts.timeoutMs || 10000;
-      const timer = setTimeout(() => finish({ exitCode: null, timedOut: true, timeoutMs }), timeoutMs);
+      let timer = setTimeout(() => finish({ exitCode: null, timedOut: true, timeoutMs }), timeoutMs);
+      const feedWatchdog = () => {
+        clearTimeout(watchdog);
+        watchdog = setTimeout(() => finish({ exitCode: null, timedOut: true, frameStuck: true, timeoutMs: 8000 }), 8000);
+      };
       running = { worker: w, stop: () => finish({ exitCode: null, stopped: true }) };
       w.onmessage = (e) => {
         const m = e.data;
         if (m.type === 'output') {
           if (m.fd === 2) stderr += m.text; else stdout += m.text;
           if (opts.onOutput) opts.onOutput(m.text, m.fd);
+        } else if (m.type === 'frame') {
+          frames = m.count;
+          if (opts.onFrame) opts.onFrame(m.pixels, m.count);
+        } else if (m.type === 'looping') {
+          clearTimeout(timer);
+          running.looping = true;
+          feedWatchdog();
+          if (opts.onLooping) opts.onLooping();
+        } else if (m.type === 'tick') {
+          feedWatchdog();
         } else if (m.type === 'done') {
           finish(m.result);
         }
@@ -96,6 +116,10 @@
       w.onerror = (e) => finish({ exitCode: null, trap: e.message || 'The program crashed' });
       w.postMessage({ memfsModule, wasm, stdin: opts.stdin || '', files: opts.files || {} });
     });
+  }
+
+  function setButtons(value) {
+    if (running) running.worker.postMessage({ type: 'buttons', value });
   }
 
   function stop() {
@@ -107,6 +131,7 @@
     build,
     run,
     stop,
+    setButtons,
     get status() { return status; },
     get isRunning() { return !!running; },
     onStatus(fn) { listeners.push(fn); fn(status); },

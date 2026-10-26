@@ -22,9 +22,36 @@
     return m;
   }
 
-  // Returns { exitCode, trap?: string, stdout, stderr, truncated }
+  const SCREEN_W = 256;
+  const SCREEN_H = 240;
+
+  // Returns { exitCode, trap?: string, stdout, stderr, truncated, app?, loopIndex? }
   // files: { 'name.nes': Uint8Array } placed next to the program, so it can fopen them.
-  async function runProgram({ memfsModule, wasm, stdin = '', onOutput, maxOutput = 200000, argv = ['program'], env = {}, files = {} }) {
+  // screen: { show(rgba: Uint8ClampedArray), buttons() } for programs that use screen.h.
+  //   If the program calls screen_loop(f), the result has `loopIndex`, and
+  //   `callLoop(result)` runs one frame.
+  async function runProgram({ memfsModule, wasm, stdin = '', onOutput, maxOutput = 200000, argv = ['program'], env = {}, files = {}, screen = {} }) {
+    let loopIndex = null;
+    let app;
+    const screenEnv = {
+      screen_show(ptr) {
+        if (!screen.show) return;
+        app.mem.check();
+        const src = new Uint8Array(app.mem.buffer, ptr, SCREEN_W * SCREEN_H * 4);
+        const rgba = new Uint8ClampedArray(SCREEN_W * SCREEN_H * 4);
+        for (let i = 0; i < rgba.length; i += 4) {
+          // 0x00RRGGBB stored little-endian: B, G, R, 0
+          rgba[i] = src[i + 2];
+          rgba[i + 1] = src[i + 1];
+          rgba[i + 2] = src[i];
+          rgba[i + 3] = 255;
+        }
+        screen.show(rgba);
+      },
+      screen_loop(index) { loopIndex = index; },
+      screen_buttons() { return screen.buttons ? screen.buttons() & 0xFF : 0; },
+    };
+    env = Object.assign(screenEnv, env);
     const decoders = { 1: new TextDecoder(), 2: new TextDecoder() };
     let stdout = '';
     let stderr = '';
@@ -43,7 +70,6 @@
     });
     await memfs.ready;
     memfs.setStdin(stdin);
-    let app;
     try {
       const module = wasm instanceof WebAssembly.Module ? wasm : await WebAssembly.compile(wasm);
       app = new App(module, memfs, argv, env, files);
@@ -53,12 +79,18 @@
     }
     try {
       const exitCode = await app.run();
-      return { exitCode, stdout, stderr, truncated };
+      return { exitCode, stdout, stderr, truncated, app, loopIndex };
     } catch (e) {
       if (truncated) return { exitCode: null, stdout, stderr, truncated };
       return { exitCode: null, trap: explainTrap(e && e.message), rawTrap: String(e && e.message), stdout, stderr, truncated };
     }
   }
 
-  global.OpcodeProgram = { runProgram, explainTrap };
+  // Runs one frame of a program that called screen_loop. Throws on a trap.
+  function callLoop(result) {
+    const table = result.app.exports.__indirect_function_table;
+    table.get(result.loopIndex)();
+  }
+
+  global.OpcodeProgram = { runProgram, callLoop, explainTrap, SCREEN_W, SCREEN_H };
 })(typeof self !== 'undefined' ? self : globalThis);

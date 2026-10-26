@@ -84,6 +84,23 @@ The CPU lessons (13 to 15) are generated from a reference implementation:
   `lessons/cpu-data.js`. Run it after changing anything in that folder, then
   `node tests/lessons.test.js` to check the same in the browser compiler.
 
+## The reference cartridge and PPU (tools/refnes)
+
+Lessons 16 to 18 work the same way. `cart.staged.c`, `bus.staged.c` and
+`ppu.staged.c` hold a reference cartridge (iNES, mapper 0), bus and PPU with
+`//@ N` markers for exercise stages 13-21; `course/` holds the programs the
+course provides (shown read-only to the learner) and `harness/` the hidden
+test programs. `python3 build.py` compiles every stage with gcc, runs the
+tests and writes `lessons/nes-data.js`.
+
+## The screen
+
+Programs can draw with `screen.h` (`screen_show`, `screen_loop`,
+`screen_buttons`). These are provided by the page: the linker allows them
+as imports (`opcode.imports`), `compiler/program.js` implements them, and the
+run worker calls the `screen_loop` callback about 60 times a second until the
+learner presses Stop. Frames are shown over the lesson column.
+
 ## Credits
 
 - Clang/LLD in WebAssembly and the in-memory file system: [binji/wasm-clang](https://github.com/binji/wasm-clang)

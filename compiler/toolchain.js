@@ -72,6 +72,8 @@
       this.memfs = new MemFS(this.memfsModule, (b) => this.output.push(this.decoder.decode(b, { stream: true })));
       await this.memfs.ready;
       untar(this.sysroot, this.memfs);
+      // Functions the page provides to programs (screen.h).
+      this.memfs.addFile('opcode.imports', 'screen_show\nscreen_loop\nscreen_buttons\n');
       this.buildsInFs = 0;
     }
 
@@ -128,7 +130,8 @@
         '-z', `stack-size=${options.stackSize || 1048576}`,
         `-L${libdir}`, `${libdir}/crt1.o`, ...objects,
         '-lc', '/lib/clang/8.0.1/lib/wasi/libclang_rt.builtins-wasm32.a',
-        ...(options.allowUndefinedFile ? [`--allow-undefined-file=${options.allowUndefinedFile}`] : []),
+        '--allow-undefined-file=opcode.imports',
+        '--export-table',
         '-o', wasm,
       ]);
       diagnostics += clean(r.text);
