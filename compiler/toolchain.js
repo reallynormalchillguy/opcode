@@ -16,6 +16,10 @@
     '-ferror-limit', '19',
     '-fmessage-length', '0',
     '-fcolor-diagnostics',
+    // Uninitialised globals are "common" symbols by default in Clang 8,
+    // which its WebAssembly backend cannot handle. Newer compilers default
+    // to -fno-common too.
+    '-fno-common',
   ];
 
   class Toolchain {
@@ -57,10 +61,18 @@
       this.memfsModule = memfsMod;
       this.clang = clangMod;
       this.lld = lldMod;
-      this.memfs = new MemFS(memfsMod, (b) => this.output.push(this.decoder.decode(b, { stream: true })));
-      await this.memfs.ready;
-      untar(bytes['sysroot.tar.gz'], this.memfs);
+      this.sysroot = bytes['sysroot.tar.gz'];
+      await this.freshFileSystem();
       this.onStatus('Compiler ready', null);
+    }
+
+    // The in-memory file system has a fixed number of file slots and no
+    // cheap way to delete, so it is rebuilt from the headers every so often.
+    async freshFileSystem() {
+      this.memfs = new MemFS(this.memfsModule, (b) => this.output.push(this.decoder.decode(b, { stream: true })));
+      await this.memfs.ready;
+      untar(this.sysroot, this.memfs);
+      this.buildsInFs = 0;
     }
 
     async tool(module, argv) {
@@ -81,6 +93,8 @@
     async build(files, options = {}) {
       await this.ready;
       const t0 = Date.now();
+      if (this.buildsInFs >= 24) await this.freshFileSystem();
+      this.buildsInFs++;
       const dir = `w${++this.buildCount}`;
       this.memfs.addDirectory(dir);
       for (const [name, text] of Object.entries(files)) {
@@ -100,6 +114,7 @@
           'clang', '-cc1', '-emit-obj', ...CLANG_ARGS,
           '-I', dir, opt, '-std=c11', '-Wall', '-Wno-unused-variable', '-Wno-unused-function',
           ...(options.defines || []).map((d) => `-D${d}`),
+          ...((options.fileDefines && options.fileDefines[src]) || []).map((d) => `-D${d}`),
           '-o', obj, '-x', 'c', `${dir}/${src}`,
         ]);
         diagnostics += clean(r.text);
@@ -118,7 +133,15 @@
       ]);
       diagnostics += clean(r.text);
       if (r.code !== 0) return { ok: false, diagnostics, ms: Date.now() - t0, linkError: true };
-      return { ok: true, wasm: this.memfs.getFileContents(wasm), diagnostics, ms: Date.now() - t0 };
+      const bytes = this.memfs.getFileContents(wasm);
+      // This old linker can produce a broken program instead of an error when
+      // a function is called with a different signature than it was defined
+      // with (only possible across files). Catch that here.
+      if (!WebAssembly.validate(bytes)) {
+        diagnostics += 'error: a function is used with different parameters or return type than it was defined with. Check that every declaration (including the ones in header files) matches its definition exactly.\n';
+        return { ok: false, diagnostics, ms: Date.now() - t0, linkError: true };
+      }
+      return { ok: true, wasm: bytes, diagnostics, ms: Date.now() - t0 };
     }
   }
 

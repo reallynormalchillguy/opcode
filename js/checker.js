@@ -42,7 +42,20 @@
     return failed;
   }
 
-  const api = { normalize, compare, checkRules, stripComments };
+  // What to compile for Check. Exercises with a `harness` (hidden test
+  // files such as check.c) test the learner's functions directly: the
+  // learner's own main() is renamed so the harness main() runs instead.
+  function checkBuild(exercise, files) {
+    if (!exercise.harness) return { files, options: {} };
+    const fileDefines = {};
+    for (const name of Object.keys(files)) {
+      // Files the harness replaces (for example a hidden main.c) keep their main.
+      if (name.endsWith('.c') && !(name in exercise.harness)) fileDefines[name] = ['main=opcode_learner_main'];
+    }
+    return { files: Object.assign({}, files, exercise.harness), options: { fileDefines } };
+  }
+
+  const api = { normalize, compare, checkRules, stripComments, checkBuild };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   global.Checker = api;
 })(typeof window !== 'undefined' ? window : globalThis);

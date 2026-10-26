@@ -54,6 +54,12 @@ node tests/lessons.test.js
 It compiles every runnable example, checks that every exercise solution
 passes its tests, and that the starter code does not.
 
+Exercises can test the learner's functions directly with a `harness`: hidden
+files (usually `check.c`) that are compiled together with the learner's code
+when they press Check. The learner's own `main` is renamed so the harness
+`main` runs instead. A harness file with the same name as a learner file (for
+example `main.c`) replaces it during Check.
+
 ## Credits
 
 - Clang/LLD in WebAssembly and the in-memory file system: [binji/wasm-clang](https://github.com/binji/wasm-clang)

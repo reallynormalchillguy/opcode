@@ -187,7 +187,7 @@
   }
 
   function renderLesson(lesson) {
-    const main = $('#lesson');
+    const main = $('#lesson-content');
     main.innerHTML = '';
     const flat = Course.flat();
     const entry = flat.find((f) => f.id === lesson.id);
@@ -222,7 +222,7 @@
     }
     art.appendChild(pager);
     main.appendChild(art);
-    main.scrollTop = 0;
+    $('#lesson').scrollTop = 0;
   }
 
   /* ---------- Workbench ---------- */
@@ -318,6 +318,9 @@
     const ex = current.exercise;
     const box = $('#ex-prompt');
     box.innerHTML = ex.prompt;
+    if (ex.harness && Object.keys(ex.harness).some((n) => n !== 'main.c' && n.endsWith('.c'))) {
+      box.appendChild(el('p', { class: 'prompt-note' }, 'Check calls your functions directly with its own tests. Your <code>main</code> is just for trying things with Run.'));
+    }
     if (current.hintsShown > 0) {
       const hints = el('div', { class: 'hints' });
       ex.hints.slice(0, current.hintsShown).forEach((h, i) => {
@@ -345,7 +348,8 @@
     renderPrompt();
     setFiles(Progress.getCode(ex.id) || ex.files);
     const saved = Progress.getStdin(ex.id);
-    $('#stdin').value = saved != null ? saved : (ex.stdin || (ex.tests[0] && ex.tests[0].stdin) || '');
+    $('#stdin').value = saved != null ? saved : (ex.stdin || (!ex.harness && ex.tests[0] && ex.tests[0].stdin) || '');
+    requestAnimationFrame(fitStdin);
     clearConsole();
     consoleNote(Progress.isSolved(ex.id)
       ? 'You have already solved this one. Run and Check still work if you want to experiment.'
@@ -397,10 +401,11 @@
     runBtn.disabled = busy && mode !== 'run';
   }
 
-  async function buildCurrent() {
+  async function buildCurrent(forCheck) {
     if (Compiler.status.state !== 'ready') consoleNote('Waiting for the compiler to finish downloading…', 'muted');
     const t = consoleNote('Compiling…', 'muted');
-    const r = await Compiler.build(currentFiles());
+    const plan = forCheck ? Checker.checkBuild(current.exercise, currentFiles()) : { files: currentFiles(), options: {} };
+    const r = await Compiler.build(plan.files, plan.options);
     t.remove();
     return r;
   }
@@ -456,14 +461,23 @@
     $('#console-title').textContent = 'Console: check';
     setBusy(true, 'check');
     try {
-      const r = await buildCurrent();
+      const r = await buildCurrent(true);
       if (!r.ok) {
         consoleDiag(r.diagnostics);
-        consoleNote('The program does not compile yet, so it cannot be tested. Fix the first error above.', 'bad');
+        const harnessNames = Object.keys(ex.harness || {});
+        const inHarness = harnessNames.some((n) => r.diagnostics.includes(`${n}:`));
+        if (inHarness || (ex.harness && r.linkError)) {
+          consoleNote('The checker could not call your code. Make sure every function asked for exists, with exactly the name, parameters and return type given in the task.', 'bad');
+        } else {
+          consoleNote('The program does not compile yet, so it cannot be tested. Fix the first error above.', 'bad');
+        }
         current.failedChecks++;
         return;
       }
       consoleDiag(r.diagnostics);
+      if (ex.harness && /signature mismatch/.test(r.diagnostics)) {
+        consoleNote('A function does not have the parameters or return type the task asks for, so the checker cannot call it correctly. Compare your function\'s first line with the task.', 'bad');
+      }
       const results = consoleAppend(el('ol', { class: 'tests' }));
       let firstFail = null;
       let passed = 0;
@@ -576,8 +590,14 @@
   $('#btn-solution').addEventListener('click', showSolution);
   $('#btn-reset').addEventListener('click', resetCode);
   $('#btn-clear').addEventListener('click', clearConsole);
+  function fitStdin() {
+    const t = $('#stdin');
+    t.style.height = 'auto';
+    t.style.height = `${Math.min(t.scrollHeight + 2, parseFloat(getComputedStyle(t).maxHeight) || 200)}px`;
+  }
   $('#stdin').addEventListener('input', () => {
     if (current.exercise) Progress.setStdin(current.exercise.id, $('#stdin').value);
+    fitStdin();
   });
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.target.closest('.CodeMirror')) {
@@ -585,6 +605,99 @@
       if (e.shiftKey) check(); else run();
     }
   });
+
+  /* ---------- View settings: text size, course map, editor/console split ---------- */
+
+  const PREFS_KEY = 'opcode.prefs';
+  let prefs = {};
+  try { prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {}; } catch (e) { prefs = {}; }
+  function savePrefs() {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* ignore */ }
+  }
+  const root = document.documentElement;
+
+  function applySize(size) {
+    root.dataset.size = size;
+    if (typeof fitStdin === 'function') requestAnimationFrame(fitStdin);
+    document.querySelectorAll('.size-switch button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.size === size)));
+    editor.refresh();
+  }
+  document.querySelectorAll('.size-switch button').forEach((b) => {
+    b.addEventListener('click', () => { prefs.size = b.dataset.size; savePrefs(); applySize(prefs.size); });
+  });
+  applySize(root.dataset.size || 'm');
+
+  const narrow = () => window.matchMedia('(max-width: 1100px)').matches;
+  function setMap(state, remember) {
+    root.dataset.map = state;
+    $('#map-toggle').setAttribute('aria-expanded', String(state === 'open'));
+    $('#map-toggle-text').textContent = state === 'open' ? 'Hide lessons' : 'Lessons';
+    if (remember && !narrow()) { prefs.map = state; savePrefs(); }
+  }
+  $('#map-toggle').addEventListener('click', () => setMap(root.dataset.map === 'open' ? 'closed' : 'open', true));
+  if (narrow()) root.dataset.map = 'closed';
+  setMap(root.dataset.map || 'open', false);
+  $('#course-map').addEventListener('click', (e) => {
+    if (narrow() && e.target.closest('a')) setMap('closed', false);
+  });
+  $('#lesson').addEventListener('click', (e) => {
+    if (narrow() && root.dataset.map === 'open' && !e.target.closest('#map-toggle')) setMap('closed', false);
+  });
+
+  const bench = $('#bench');
+  function applySplit(ratio) {
+    const r = Math.min(0.82, Math.max(0.22, ratio));
+    bench.style.setProperty('--ed', `${r}fr`);
+    bench.style.setProperty('--co', `${1 - r}fr`);
+  }
+  if (prefs.split) applySplit(prefs.split);
+  const splitter = $('#splitter');
+  const codePane = $('.code-pane');
+  const outPane = $('.out-pane');
+  function currentRatio() {
+    const a = codePane.getBoundingClientRect().height;
+    const b = outPane.getBoundingClientRect().height;
+    return a / (a + b);
+  }
+  splitter.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    splitter.setPointerCapture(e.pointerId);
+    splitter.classList.add('dragging');
+    const startY = e.clientY;
+    const a = codePane.getBoundingClientRect().height;
+    const b = outPane.getBoundingClientRect().height;
+    const move = (ev) => applySplit((a + ev.clientY - startY) / (a + b));
+    const up = () => {
+      splitter.classList.remove('dragging');
+      splitter.removeEventListener('pointermove', move);
+      splitter.removeEventListener('pointerup', up);
+      prefs.split = Math.min(0.82, Math.max(0.22, currentRatio()));
+      savePrefs();
+    };
+    splitter.addEventListener('pointermove', move);
+    splitter.addEventListener('pointerup', up);
+  });
+  splitter.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    applySplit(currentRatio() + (e.key === 'ArrowUp' ? -0.05 : 0.05));
+    prefs.split = currentRatio();
+    savePrefs();
+  });
+  splitter.addEventListener('dblclick', () => { delete prefs.split; savePrefs(); bench.style.removeProperty('--ed'); bench.style.removeProperty('--co'); });
+  new ResizeObserver(() => editor.refresh()).observe($('#editor'));
+
+  function applyTask(hidden) {
+    bench.classList.toggle('task-hidden', hidden);
+    $('#btn-task').textContent = hidden ? 'Show task' : 'Hide task';
+    $('#btn-task').setAttribute('aria-expanded', String(!hidden));
+  }
+  $('#btn-task').addEventListener('click', () => {
+    prefs.taskHidden = !bench.classList.contains('task-hidden');
+    savePrefs();
+    applyTask(prefs.taskHidden);
+  });
+  applyTask(!!prefs.taskHidden);
 
   /* ---------- Routing ---------- */
 

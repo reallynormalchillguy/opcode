@@ -58,7 +58,7 @@
     return ready;
   }
 
-  async function build(files, options) {
+  async function build(files, options = {}) {
     start();
     await ready;
     const id = nextId++;

@@ -1,10 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-size="m">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Opcode — learn C, then build a NES emulator</title>
   <meta name="description" content="An interactive course that teaches C from zero and then guides you through writing a NES emulator, with a real C compiler running in your browser.">
+  <script>
+    // Apply saved view settings before the first paint.
+    try {
+      var p = JSON.parse(localStorage.getItem('opcode.prefs') || '{}');
+      if (p.size) document.documentElement.dataset.size = p.size;
+      document.documentElement.dataset.map = p.map || (window.innerWidth >= 1400 ? 'open' : 'closed');
+    } catch (e) { document.documentElement.dataset.map = 'open'; }
+  </script>
   <link rel="stylesheet" href="vendor/fonts/fonts.css">
   <link rel="stylesheet" href="vendor/codemirror/codemirror.css">
   <link rel="stylesheet" href="styles.css">
@@ -12,7 +20,7 @@
 </head>
 <body>
   <div class="layout">
-    <aside class="side" aria-label="Course map">
+    <aside class="side" id="side" aria-label="Course map">
       <div class="brand">
         <span class="led" id="led" aria-hidden="true"></span>
         <div>
@@ -25,36 +33,66 @@
         <span class="meter" aria-hidden="true"><span id="compiler-meter"></span></span>
       </div>
       <nav id="course-map" class="course-map"></nav>
+      <div class="side-foot">
+        <span class="side-foot-label" id="size-label">Text size</span>
+        <div class="size-switch" role="radiogroup" aria-labelledby="size-label">
+          <button type="button" role="radio" data-size="s" class="size-s" aria-label="Small text">A</button>
+          <button type="button" role="radio" data-size="m" class="size-m" aria-label="Medium text">A</button>
+          <button type="button" role="radio" data-size="l" class="size-l" aria-label="Large text">A</button>
+        </div>
+      </div>
     </aside>
 
-    <main class="lesson" id="lesson" tabindex="-1"></main>
+    <main class="lesson" id="lesson" tabindex="-1">
+      <div class="lesson-bar">
+        <button type="button" class="map-toggle" id="map-toggle" aria-controls="side">
+          <span class="map-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span id="map-toggle-text">Lessons</span>
+        </button>
+      </div>
+      <div id="lesson-content"></div>
+    </main>
 
     <section class="bench" id="bench" aria-label="Exercise workbench">
       <header class="bench-head">
-        <div class="ex-switch" id="ex-switch"></div>
+        <div class="ex-switch-row">
+          <div class="ex-switch" id="ex-switch"></div>
+          <button type="button" class="btn ghost small" id="btn-task" aria-controls="ex-prompt" aria-expanded="true">Hide task</button>
+        </div>
         <h2 class="ex-title" id="ex-title"></h2>
       </header>
       <div class="ex-prompt" id="ex-prompt"></div>
-      <div class="toolbar">
-        <div class="file-tabs" id="file-tabs"></div>
-        <div class="tools">
-          <button class="btn ghost" id="btn-reset" title="Put the starting code back">Reset</button>
-          <button class="btn ghost" id="btn-hint">Hint</button>
-          <button class="btn ghost" id="btn-solution">Solution</button>
-          <button class="btn" id="btn-run" title="Ctrl+Enter">Run</button>
-          <button class="btn primary" id="btn-check" title="Ctrl+Shift+Enter">Check</button>
+
+      <div class="pane code-pane">
+        <div class="toolbar">
+          <div class="file-tabs" id="file-tabs" role="tablist" aria-label="Files"></div>
+          <div class="tools">
+            <button class="btn ghost" id="btn-reset" title="Put the starting code back">Reset</button>
+            <button class="btn ghost" id="btn-hint">Hint</button>
+            <button class="btn ghost" id="btn-solution">Solution</button>
+          </div>
+        </div>
+        <div class="editor" id="editor"></div>
+        <div class="run-bar">
+          <span class="keys"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs, add <kbd>Shift</kbd> to check</span>
+          <button class="btn" id="btn-run">Run</button>
+          <button class="btn primary" id="btn-check">Check</button>
         </div>
       </div>
-      <div class="editor" id="editor"></div>
-      <div class="io">
-        <label class="io-label" for="stdin">Program input</label>
-        <textarea id="stdin" class="stdin" rows="2" spellcheck="false" placeholder="Text your program reads with scanf goes here"></textarea>
+
+      <div class="splitter" id="splitter" role="separator" aria-orientation="horizontal" aria-label="Resize the editor and the console" tabindex="0"></div>
+
+      <div class="pane out-pane">
+        <div class="io">
+          <label class="io-label" for="stdin">Program input</label>
+          <textarea id="stdin" class="stdin" rows="1" spellcheck="false" placeholder="What your program reads with scanf"></textarea>
+        </div>
+        <div class="console-head">
+          <span id="console-title">Console</span>
+          <button class="btn ghost small" id="btn-clear">Clear</button>
+        </div>
+        <div class="console" id="console" aria-live="polite"></div>
       </div>
-      <div class="console-head">
-        <span id="console-title">Console</span>
-        <button class="btn ghost small" id="btn-clear">Clear</button>
-      </div>
-      <div class="console" id="console" aria-live="polite"></div>
     </section>
   </div>
 
@@ -68,6 +106,14 @@
   <script src="lessons/c-hello.js"></script>
   <script src="lessons/c-values.js"></script>
   <script src="lessons/c-control.js"></script>
+  <script src="lessons/c-functions.js"></script>
+  <script src="lessons/c-arrays.js"></script>
+  <script src="lessons/c-strings.js"></script>
+  <script src="lessons/c-pointers.js"></script>
+  <script src="lessons/c-structs.js"></script>
+  <script src="lessons/c-memory.js"></script>
+  <script src="lessons/c-bits.js"></script>
+  <script src="lessons/c-files.js"></script>
 
   <script src="js/checker.js"></script>
   <script src="js/highlight.js"></script>

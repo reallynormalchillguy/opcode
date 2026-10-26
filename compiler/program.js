@@ -42,8 +42,14 @@
     });
     await memfs.ready;
     memfs.setStdin(stdin);
-    const module = wasm instanceof WebAssembly.Module ? wasm : await WebAssembly.compile(wasm);
-    const app = new App(module, memfs, argv, env);
+    let app;
+    try {
+      const module = wasm instanceof WebAssembly.Module ? wasm : await WebAssembly.compile(wasm);
+      app = new App(module, memfs, argv, env);
+      await app.ready;
+    } catch (e) {
+      return { exitCode: null, trap: 'The program could not be started: ' + (e && e.message), stdout, stderr, truncated };
+    }
     try {
       const exitCode = await app.run();
       return { exitCode, stdout, stderr, truncated };
