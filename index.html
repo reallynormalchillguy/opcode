@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Opcode — learn C, then build a NES emulator</title>
+  <meta name="description" content="An interactive course that teaches C from zero and then guides you through writing a NES emulator, with a real C compiler running in your browser.">
+  <link rel="stylesheet" href="vendor/fonts/fonts.css">
+  <link rel="stylesheet" href="vendor/codemirror/codemirror.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23CBC8C2'/><rect x='3' y='6' width='4' height='4' rx='1' fill='%23C8102E'/></svg>">
+</head>
+<body>
+  <div class="layout">
+    <aside class="side" aria-label="Course map">
+      <div class="brand">
+        <span class="led" id="led" aria-hidden="true"></span>
+        <div>
+          <div class="wordmark">Opcode</div>
+          <div class="brand-sub">C, then a NES</div>
+        </div>
+      </div>
+      <div class="compiler-status" id="compiler-status" role="status">
+        <span id="compiler-status-text">Compiler not loaded</span>
+        <span class="meter" aria-hidden="true"><span id="compiler-meter"></span></span>
+      </div>
+      <nav id="course-map" class="course-map"></nav>
+    </aside>
+
+    <main class="lesson" id="lesson" tabindex="-1"></main>
+
+    <section class="bench" id="bench" aria-label="Exercise workbench">
+      <header class="bench-head">
+        <div class="ex-switch" id="ex-switch"></div>
+        <h2 class="ex-title" id="ex-title"></h2>
+      </header>
+      <div class="ex-prompt" id="ex-prompt"></div>
+      <div class="toolbar">
+        <div class="file-tabs" id="file-tabs"></div>
+        <div class="tools">
+          <button class="btn ghost" id="btn-reset" title="Put the starting code back">Reset</button>
+          <button class="btn ghost" id="btn-hint">Hint</button>
+          <button class="btn ghost" id="btn-solution">Solution</button>
+          <button class="btn" id="btn-run" title="Ctrl+Enter">Run</button>
+          <button class="btn primary" id="btn-check" title="Ctrl+Shift+Enter">Check</button>
+        </div>
+      </div>
+      <div class="editor" id="editor"></div>
+      <div class="io">
+        <label class="io-label" for="stdin">Program input</label>
+        <textarea id="stdin" class="stdin" rows="2" spellcheck="false" placeholder="Text your program reads with scanf goes here"></textarea>
+      </div>
+      <div class="console-head">
+        <span id="console-title">Console</span>
+        <button class="btn ghost small" id="btn-clear">Clear</button>
+      </div>
+      <div class="console" id="console" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <script src="vendor/codemirror/codemirror.js"></script>
+  <script src="vendor/codemirror/clike.js"></script>
+  <script src="vendor/codemirror/matchbrackets.js"></script>
+  <script src="vendor/codemirror/closebrackets.js"></script>
+  <script src="vendor/codemirror/comment.js"></script>
+
+  <script src="js/course.js"></script>
+  <script src="lessons/c-hello.js"></script>
+  <script src="lessons/c-values.js"></script>
+  <script src="lessons/c-control.js"></script>
+
+  <script src="js/checker.js"></script>
+  <script src="js/highlight.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/compiler-client.js"></script>
+  <script src="js/console.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
