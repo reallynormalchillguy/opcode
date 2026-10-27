@@ -83,6 +83,16 @@
     for (const [name, spec] of Object.entries(ex.project.learner || {})) {
       const saved = store.file(name);
       if (saved != null) {
+        // A file that is exactly one of the course's versions from an earlier
+        // exercise was never edited by the learner (they skipped exercises or
+        // used Solution): bring it up to this exercise. Their own code is kept.
+        const order = versionOrder(name, saved);
+        const here = exerciseOrder.get(ex.id);
+        if (order != null && here != null && order < here - 0.5 && saved !== spec.starter) {
+          files[name] = spec.starter;
+          created[name] = 'updated';
+          continue;
+        }
         files[name] = saved;
         continue;
       }
@@ -94,6 +104,37 @@
     const readOnly = Object.keys(ex.project.course || {});
     for (const name of readOnly) files[name] = ex.project.course[name];
     return { files, readOnly, created };
+  }
+
+  // Every course version of every project file, with its place in the course
+  // (exercise n's starter is at n - 0.5, its solution at n).
+  let versions = null;
+  const exerciseOrder = new Map();
+  function versionOrder(name, text) {
+    if (!versions) {
+      versions = new Map();
+      let n = 0;
+      for (const part of OUTLINE) {
+        for (const [id] of part.lessons) {
+          const lesson = lessons.get(id);
+          for (const ex of (lesson && lesson.exercises) || []) {
+            n += 1;
+            exerciseOrder.set(ex.id, n);
+            if (!ex.project) continue;
+            const note = (file, t, order) => {
+              if (t == null) return;
+              if (!versions.has(file)) versions.set(file, new Map());
+              const m = versions.get(file);
+              m.set(t, Math.max(m.has(t) ? m.get(t) : -1, order));
+            };
+            for (const [file, spec] of Object.entries(ex.project.learner || {})) note(file, spec.starter, n - 0.5);
+            for (const [file, t] of Object.entries(ex.solution || {})) note(file, t, n);
+          }
+        }
+      }
+    }
+    const m = versions.get(name);
+    return m && m.has(text) ? m.get(text) : null;
   }
 
   window.Course = {

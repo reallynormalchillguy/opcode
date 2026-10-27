@@ -403,7 +403,8 @@
     clearConsole();
     for (const [name, how] of Object.entries(created)) {
       const from = ex.project.learner[name].from;
-      if (how === 'imported') consoleNote(`<strong>${H.esc(name)}</strong> was added to your emulator project, starting from your own solution to “${H.esc(exerciseTitle(from.exercise))}”.`, 'project');
+      if (how === 'updated') consoleNote(`<strong>${H.esc(name)}</strong> was the course's version from an earlier exercise, so it has been brought up to date for this one.`, 'project');
+      else if (how === 'imported') consoleNote(`<strong>${H.esc(name)}</strong> was added to your emulator project, starting from your own solution to “${H.esc(exerciseTitle(from.exercise))}”.`, 'project');
       else consoleNote(`<strong>${H.esc(name)}</strong> was added to your emulator project.`, 'project');
     }
     if (isProject(ex)) {
@@ -415,6 +416,9 @@
     }
     hideScreen();
     $('.tv-help').hidden = !ex.controller;
+    $('#pad').hidden = !ex.controller;
+    const count = lesson.exercises.length;
+    $('#mobile-ex-label').textContent = count > 1 ? `Exercise ${index + 1} of ${count}` : 'Exercise';
     renderRomPicker();
     consoleNote(Progress.isSolved(ex.id)
       ? 'You have already solved this one. Run and Check still work if you want to experiment.'
@@ -643,14 +647,48 @@
     KeyX: 0x01, KeyK: 0x01, KeyZ: 0x02, KeyJ: 0x02, ShiftLeft: 0x04, ShiftRight: 0x04, Enter: 0x08,
     ArrowUp: 0x10, KeyW: 0x10, ArrowDown: 0x20, KeyS: 0x20, ArrowLeft: 0x40, KeyA: 0x40, ArrowRight: 0x80, KeyD: 0x80,
   };
-  let buttons = 0;
+  let buttons = 0;     // held on the keyboard
+  let touchBits = 0;   // held on the touch controller
   function setKey(e, down) {
     const bit = KEY_BITS[e.code];
     if (!bit) return;
     e.preventDefault();
     buttons = down ? buttons | bit : buttons & ~bit;
-    Compiler.setButtons(buttons);
+    Compiler.setButtons(buttons | touchBits);
   }
+
+  // Touch controller: every finger on it holds the button under it, and can
+  // slide from one to another (the corners of the cross are diagonals).
+  const pad = $('#pad');
+  const fingers = new Map(); // pointerId -> bits
+  function bitsAt(e) {
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const b = hit && hit.closest('#pad [data-bit]');
+    return b ? Number(b.dataset.bit) : 0;
+  }
+  function padChanged() {
+    touchBits = 0;
+    for (const bits of fingers.values()) touchBits |= bits;
+    pad.querySelectorAll('button[data-bit]').forEach((b) => b.classList.toggle('on', (touchBits & Number(b.dataset.bit)) !== 0));
+    Compiler.setButtons(buttons | touchBits);
+  }
+  pad.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { pad.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+    fingers.set(e.pointerId, bitsAt(e));
+    padChanged();
+  });
+  pad.addEventListener('pointermove', (e) => {
+    if (!fingers.has(e.pointerId)) return;
+    const bits = bitsAt(e);
+    if (bits !== fingers.get(e.pointerId)) { fingers.set(e.pointerId, bits); padChanged(); }
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    pad.addEventListener(type, (e) => {
+      if (fingers.delete(e.pointerId)) padChanged();
+    });
+  }
+  pad.addEventListener('contextmenu', (e) => e.preventDefault());
   screenCanvas.addEventListener('keydown', (e) => setKey(e, true));
   screenCanvas.addEventListener('keyup', (e) => setKey(e, false));
   screenCanvas.addEventListener('focus', () => $('#screen-wrap').classList.add('playing'));
@@ -658,7 +696,7 @@
   screenCanvas.addEventListener('blur', () => {
     $('#screen-wrap').classList.remove('playing');
     buttons = 0;
-    Compiler.setButtons(0);
+    Compiler.setButtons(touchBits);
   });
   screenCanvas.addEventListener('click', () => screenCanvas.focus());
 
@@ -1082,6 +1120,27 @@
 
   /* ---------- Routing ---------- */
 
+  /* ---------- Phones: the lesson or the exercise ---------- */
+
+  const PHONE = '(max-width: 820px), (max-height: 520px) and (pointer: coarse)';  // as in styles.css
+  const phone = () => window.matchMedia(PHONE).matches;
+  let lessonScroll = 0;
+  function setView(view) {
+    if (root.dataset.view === view) return;
+    if (view === 'code') lessonScroll = window.scrollY;
+    root.dataset.view = view;
+    document.querySelectorAll('#mobile-tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+    if (view === 'code') {
+      window.scrollTo(0, 0);
+      editor.refresh();
+    } else {
+      window.scrollTo(0, lessonScroll);
+    }
+  }
+  document.querySelectorAll('#mobile-tabs button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+  root.dataset.view = 'lesson';
+  window.matchMedia(PHONE).addEventListener('change', () => editor.refresh());
+
   function route() {
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     let lessonId = parts[0];
@@ -1097,6 +1156,11 @@
     if (lessonChanged) {
       current.lesson = lesson;
       renderLesson(lesson);
+      if (phone()) {
+        lessonScroll = 0;
+        setView('lesson');
+        window.scrollTo(0, 0);
+      }
       const firstOpen = lesson.exercises.findIndex((e) => !Progress.isSolved(e.id));
       loadExercise(lesson, wanted != null ? wanted : Math.max(0, firstOpen));
     } else if (wanted != null && wanted !== current.exIndex) {

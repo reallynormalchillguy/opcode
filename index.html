@@ -63,6 +63,21 @@
           <button class="btn small" id="btn-tv-close" type="button">Back to the lesson</button>
         </div>
         <canvas id="screen" width="256" height="240" tabindex="0" aria-label="The program's picture. Click it to use the keyboard as a controller."></canvas>
+        <div class="pad" id="pad" aria-label="Touch controller">
+          <div class="pad-cross">
+            <span data-bit="80"></span><button type="button" data-bit="16" aria-label="Up"></button><span data-bit="144"></span>
+            <button type="button" data-bit="64" aria-label="Left"></button><span class="pad-hub"></span><button type="button" data-bit="128" aria-label="Right"></button>
+            <span data-bit="96"></span><button type="button" data-bit="32" aria-label="Down"></button><span data-bit="160"></span>
+          </div>
+          <div class="pad-mid">
+            <button type="button" data-bit="4">Select</button>
+            <button type="button" data-bit="8">Start</button>
+          </div>
+          <div class="pad-ab">
+            <button type="button" data-bit="2">B</button>
+            <button type="button" data-bit="1">A</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -114,6 +129,11 @@
       </div>
     </section>
   </div>
+
+  <nav class="mobile-tabs" id="mobile-tabs" aria-label="Lesson or exercise">
+    <button type="button" data-view="lesson" aria-pressed="true">Lesson</button>
+    <button type="button" data-view="code" aria-pressed="false"><span id="mobile-ex-label">Exercise</span></button>
+  </nav>
 
   <script src="vendor/codemirror/codemirror.js"></script>
   <script src="vendor/codemirror/clike.js"></script>
