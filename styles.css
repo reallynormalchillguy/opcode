@@ -163,6 +163,7 @@ a.map-item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
 
 .side-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
@@ -181,6 +182,21 @@ a.map-item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
   font-weight: 650;
   line-height: 1;
 }
+.reset-all {
+  flex-basis: 100%;
+  margin-top: 0.2rem;
+  padding: 0.3rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--ridge);
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+.reset-all:hover, .reset-all:focus-visible { color: var(--red-ink); text-decoration-color: currentColor; }
 .size-switch .size-s { font-size: 0.7rem; }
 .size-switch .size-m { font-size: 0.85rem; }
 .size-switch .size-l { font-size: 1.05rem; }

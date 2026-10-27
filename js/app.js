@@ -968,9 +968,33 @@
   const PREFS_KEY = 'opcode.prefs';
   let prefs = {};
   try { prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {}; } catch (e) { prefs = {}; }
+  let prefsWiped = false;
   function savePrefs() {
+    if (prefsWiped) return;
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* ignore */ }
   }
+
+  /* ---------- Reset all progress ---------- */
+
+  $('#btn-reset-all').addEventListener('click', async () => {
+    if (!confirm('Delete everything Opcode keeps in this browser?\n\n'
+      + 'Solved exercises, your code in every exercise, your emulator project, hints and settings will all be gone, '
+      + 'and the course starts again from lesson 1. This cannot be undone.\n\n'
+      + 'If you want to keep your emulator, press Download in any emulator exercise first.')) return;
+    const roms = await RomStore.list();
+    const dropRoms = roms.length > 0 && confirm(`Also delete the ${roms.length} cartridge${roms.length > 1 ? 's' : ''} you loaded (${roms.join(', ')})?\n\nOK deletes ${roms.length > 1 ? 'them' : 'it'}, Cancel keeps ${roms.length > 1 ? 'them' : 'it'}.`);
+    if (Compiler.isRunning) Compiler.stop();
+    Progress.wipe();
+    prefsWiped = true;
+    try {
+      for (const key of Object.keys(localStorage)) if (key.startsWith('opcode.')) localStorage.removeItem(key);
+    } catch (e) { /* storage unavailable: nothing was kept */ }
+    if (dropRoms) await RomStore.clear();
+    try {
+      if (window.caches) for (const key of await caches.keys()) await caches.delete(key);
+    } catch (e) { /* no caches */ }
+    location.replace(location.pathname);
+  });
   const root = document.documentElement;
 
   function applySize(size) {

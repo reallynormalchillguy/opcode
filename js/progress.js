@@ -13,18 +13,29 @@
   } catch (e) { /* storage unavailable: progress lasts for this visit only */ }
 
   let saveTimer = null;
+  let wiped = false; // after wipe(), nothing is written again until the page reloads
   function save() {
+    if (wiped) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, 250);
   }
 
   function flush() {
     clearTimeout(saveTimer);
+    if (wiped) return;
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }
+
+  // Forget everything: solved exercises, code, the emulator project.
+  function wipe() {
+    wiped = true;
+    clearTimeout(saveTimer);
+    try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   }
 
   window.Progress = {
     flush,
+    wipe,
     isSolved: (exId) => !!state.solved[exId],
     markSolved(exId) { state.solved[exId] = Date.now(); save(); },
     getCode: (exId) => state.code[exId] || null,

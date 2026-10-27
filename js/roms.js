@@ -63,5 +63,11 @@
     return bytes.length >= 16 && bytes[0] === 0x4E && bytes[1] === 0x45 && bytes[2] === 0x53 && bytes[3] === 0x1A;
   }
 
-  window.RomStore = { list, get, put, isINes };
+  // Delete every stored cartridge.
+  async function clear() {
+    memory.clear();
+    try { await tx('readwrite', (s) => s.clear()); } catch (e) { /* nothing stored */ }
+  }
+
+  window.RomStore = { list, get, put, clear, isINes };
 })();
