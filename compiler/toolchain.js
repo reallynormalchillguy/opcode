@@ -73,7 +73,7 @@
       await this.memfs.ready;
       untar(this.sysroot, this.memfs);
       // Functions the page provides to programs (screen.h).
-      this.memfs.addFile('opcode.imports', 'screen_show\nscreen_loop\nscreen_buttons\n');
+      this.memfs.addFile('opcode.imports', 'screen_show\nscreen_loop\nscreen_buttons\nscreen_audio\n');
       this.buildsInFs = 0;
     }
 

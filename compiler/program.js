@@ -50,6 +50,12 @@
       },
       screen_loop(index) { loopIndex = index; },
       screen_buttons() { return screen.buttons ? screen.buttons() & 0xFF : 0; },
+      screen_audio(ptr, count) {
+        if (!screen.audio || count <= 0) return;
+        app.mem.check();
+        const n = Math.min(count, 8192);
+        screen.audio(new Float32Array(app.mem.buffer.slice(ptr, ptr + n * 4)));
+      },
     };
     env = Object.assign(screenEnv, env);
     const decoders = { 1: new TextDecoder(), 2: new TextDecoder() };

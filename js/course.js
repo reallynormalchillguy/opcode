@@ -68,6 +68,7 @@
         ['nes-input', 'Controllers and the frame loop'],
         ['nes-scroll', 'Scrolling'],
         ['nes-mappers', 'Mappers 1 to 4'],
+        ['nes-apu', 'Sound: the APU'],
       ],
     },
   ];

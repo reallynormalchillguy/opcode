@@ -102,6 +102,8 @@
         } else if (m.type === 'frame') {
           frames = m.count;
           if (opts.onFrame) opts.onFrame(m.pixels, m.count);
+        } else if (m.type === 'audio') {
+          if (opts.onAudio) opts.onAudio(m.samples);
         } else if (m.type === 'looping') {
           clearTimeout(timer);
           running.looping = true;

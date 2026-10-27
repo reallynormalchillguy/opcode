@@ -86,11 +86,12 @@ The CPU lessons (13 to 15) are generated from a reference implementation:
 
 ## The reference cartridge, PPU and controllers (tools/refnes)
 
-Lessons 16 to 22 work the same way. `cart.staged.c`, `bus.staged.c`,
-`ppu.staged.c` and `controller.staged.c` hold a reference cartridge (iNES,
-mappers 0-4 with MMC3's scanline IRQ), bus, PPU (background, sprites, sprite
-0 hit, loopy scrolling) and controllers with `//@ N` markers for exercise
-stages 13-34; the CPU's IRQ is stage 34 of `tools/ref6502/cpu.staged.c`.
+Lessons 16 to 23 work the same way. `cart.staged.c`, `bus.staged.c`,
+`ppu.staged.c`, `controller.staged.c` and `apu.staged.c` hold a reference
+cartridge (iNES, mappers 0-4 with MMC3's scanline IRQ), bus, PPU (background,
+sprites, sprite 0 hit, loopy scrolling), controllers and APU (pulses, frame
+counter, triangle, noise, DMC) with `//@ N` markers for exercise stages
+13-38; the CPU's IRQ is stage 34 of `tools/ref6502/cpu.staged.c`.
 Headers that grew during the course (`bus.h`, `ppu.h`, `cart.h`, `cpu.h`)
 and the course's `nes.c` are staged the same way; a header version is stored
 as `bus.h@22` (from stage 22 on). For a project whose files are newer than
@@ -111,15 +112,20 @@ the opcode table in `tools/ref6502`). Rebuild it with
 tests use it. `python3 tools/demo/mappers.py` builds the mapper test
 cartridges (`nes/opcode-uxrom.nes`, `-cnrom`, `-mmc1`, `-mmc3`): each shows
 the start of every PRG bank it switches in and cycles its CHR banks, and the
-MMC3 one splits the screen with its IRQ.
+MMC3 one splits the screen with its IRQ. `python3 tools/demo/sound.py` builds
+`nes/opcode-sound.nes`, which plays each APU channel on its own, then all
+together (a tiny player follows a script of register writes).
 
-## The screen
+## The screen and sound
 
-Programs can draw with `screen.h` (`screen_show`, `screen_loop`,
-`screen_buttons`). These are provided by the page: the linker allows them
+Programs can draw and play sound with `screen.h` (`screen_show`,
+`screen_loop`, `screen_buttons`, `screen_audio`). These are provided by the page: the linker allows them
 as imports (`opcode.imports`), `compiler/program.js` implements them, and the
 run worker calls the `screen_loop` callback about 60 times a second until the
-learner presses Stop. Frames are shown over the lesson column.
+learner presses Stop. Frames are shown over the lesson column. Sound
+(44100 samples a second, about 735 per frame) goes to an AudioWorklet
+(`js/sound-worklet.js`) that keeps a few frames buffered and nudges its
+speed by up to 1% so the buffer neither runs dry nor grows.
 
 ## Credits
 

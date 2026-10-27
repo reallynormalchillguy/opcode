@@ -9,3 +9,4 @@
   from lesson 19 on and by the tests of stages 22-29.
 - `opcode-uxrom.nes`, `opcode-cnrom.nes`, `opcode-mmc1.nes`, `opcode-mmc3.nes` — the
   course's mapper test cartridges (`tools/demo/mappers.py`), used in lesson 22.
+- `opcode-sound.nes` — the course's sound test (`tools/demo/sound.py`), used in lesson 23.

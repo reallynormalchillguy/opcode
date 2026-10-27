@@ -41,6 +41,9 @@ self.onmessage = async (event) => {
       if (!frameTimer) frameTimer = setTimeout(sendFrame, 0);
     },
     buttons: () => buttons,
+    audio(samples) {
+      self.postMessage({ type: 'audio', samples }, [samples.buffer]);
+    },
   };
 
   let result;

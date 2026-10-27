@@ -962,7 +962,8 @@ kbd { font-size: 0.72rem; padding: 0.05rem 0.3rem; border: 1px solid #4c4c53; bo
   }
   .tv-frame { width: 100%; max-width: 34rem; margin: 0 auto; padding: 0.5rem; box-shadow: none; }
   .tv-help { display: none; }
-  .tv-bar .btn { margin-left: auto; }
+  .tv-bar .btn:not([hidden]) { margin-left: auto; }
+  .tv-bar .btn:not([hidden]) ~ .btn { margin-left: 0; }
   .tv canvas { width: 100%; max-width: 100%; }
 }
 

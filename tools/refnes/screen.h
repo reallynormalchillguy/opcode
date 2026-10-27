@@ -15,5 +15,11 @@ void screen_loop(void (*frame)(void));
 // The controller buttons held right now: bit 0 A, 1 B, 2 Select, 3 Start,
 // 4 Up, 5 Down, 6 Left, 7 Right. The picture must be clicked first.
 uint8_t screen_buttons(void);
+//@ 35
+
+// Play sound: `count` samples at 44100 a second, each from -1 to 1. Send
+// about 735 every frame; the page plays them one after another.
+void screen_audio(const float *samples, int count);
+//@ end
 
 #endif

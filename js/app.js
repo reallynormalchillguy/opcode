@@ -555,6 +555,7 @@
       return;
     }
     if (!current.exercise) return;
+    if (current.exercise.rom) Sound.start();         // needs the click: browsers block sound before one
     Progress.setStdin(current.exercise.id, $('#stdin').value);
     saveWork();
     clearConsole();
@@ -586,12 +587,17 @@
           $('#console').scrollTop = $('#console').scrollHeight;
         },
         onFrame: showFrame,
+        onAudio: (samples) => {
+          $('#btn-sound').hidden = false;
+          Sound.push(samples);
+        },
         onLooping: () => {
           setTvRunning(true);
           consoleNote('Running. Press Stop to end it.', 'muted');
         },
       });
       setTvRunning(false);
+      Sound.reset();
       if (!res.stdout && !res.stderr) pre.remove();
       consoleAppend(el('div', { class: 'exit' }, describeExit(res)));
     } catch (e) {
@@ -611,6 +617,7 @@
 
   function hideScreen() {
     $('#screen-wrap').hidden = true;
+    $('#btn-sound').hidden = true;
     $('#btn-tv-open').hidden = true;
     screenDismissed = false;
   }
@@ -622,6 +629,17 @@
     $('#btn-tv-open').hidden = false;
     if (!screenDismissed) $('#screen-wrap').hidden = false;
   }
+
+  function showSoundButton() {
+    $('#btn-sound').textContent = Sound.muted ? 'Sound off' : 'Sound on';
+    $('#btn-sound').setAttribute('aria-pressed', String(!Sound.muted));
+  }
+  $('#btn-sound').addEventListener('click', () => {
+    Sound.setMuted(!Sound.muted);
+    prefs.muted = Sound.muted;
+    savePrefs();
+    showSoundButton();
+  });
 
   $('#btn-tv-close').addEventListener('click', () => {
     screenDismissed = true;
@@ -708,6 +726,7 @@
     'opcode-cnrom.nes': 'nes/opcode-cnrom.nes',
     'opcode-mmc1.nes': 'nes/opcode-mmc1.nes',
     'opcode-mmc3.nes': 'nes/opcode-mmc3.nes',
+    'opcode-sound.nes': 'nes/opcode-sound.nes',
     'nestest.nes': 'nes/nestest.nes',
   };
   const LOAD_OPTION = '__load__';
@@ -1045,6 +1064,8 @@
     b.addEventListener('click', () => { prefs.size = b.dataset.size; savePrefs(); applySize(prefs.size); });
   });
   applySize(root.dataset.size || 'm');
+  Sound.setMuted(!!prefs.muted);
+  showSoundButton();
 
   const narrow = () => window.matchMedia('(max-width: 1100px)').matches;
   function setMap(state, remember) {

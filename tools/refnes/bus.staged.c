@@ -7,6 +7,9 @@
 //@ 26
 #include "controller.h"
 //@ end
+//@ 35
+#include "apu.h"
+//@ end
 
 static uint8_t ram[0x800];
 //@ 22
@@ -27,6 +30,11 @@ uint8_t bus_read(uint16_t addr) {
 //@ 19
     if (addr < 0x4000) {
         return ppu_register_read(addr & 7);
+    }
+//@ end
+//@ 35
+    if (addr == 0x4015) {                           // the sound chip's status
+        return apu_read_status();
     }
 //@ end
 //@ 26
@@ -60,6 +68,12 @@ void bus_write(uint16_t addr, uint8_t value) {
 //@ 26
     } else if (addr == 0x4016) {                    // the strobe of both controllers
         controller_write(value);
+//@ end
+//@ 35
+    } else if (addr <= 0x4013 && addr >= 0x4000) {  // the sound chip's channels
+        apu_write(addr, value);
+    } else if (addr == 0x4015 || addr == 0x4017) {  // its switches and its frame counter
+        apu_write(addr, value);
 //@ end
     } else if (addr >= 0x4020) {
         cart_cpu_write(addr, value);
