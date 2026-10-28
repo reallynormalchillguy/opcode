@@ -1,31 +1,30 @@
 (function () {
   // ---------- Files shared by this lesson's project exercises ----------
 
-  const BUS_H = (decls) => `#ifndef BUS_H
-#define BUS_H
+  const R = String.raw;
+  const D = window.CPU_DATA;
 
-#include <stdint.h>
+  // bus.h already declares everything this lesson builds.
+  const BUS_H = D.files['bus.h'];
 
-// The CPU bus: every address the CPU can read or write.
-void bus_reset(void);
-uint8_t bus_read(uint16_t addr);
-void bus_write(uint16_t addr, uint8_t value);
-${decls}
-#endif
+  // The learner's bus.cpp from lesson 12, and after each exercise here.
+  const BUS_CPP_L12 = Course.get('cpp-files').exercises[1].solution['bus.cpp'];
+  const REGION = R`
+const char* Bus::region(std::uint16_t addr) const {
+    if (addr < 0x2000) return "RAM";
+    if (addr < 0x4000) return "PPU";
+    if (addr < 0x4018) return "APU/IO";
+    if (addr < 0x4020) return "Disabled";
+    if (addr < 0x6000) return "Expansion";
+    if (addr < 0x8000) return "Cartridge RAM";
+    return "Cartridge ROM";
+}
 `;
-
-  const DECL_REGION = `
-// Name of the part of the console an address reaches.
-const char *bus_region(uint16_t addr);
-`;
-  const DECL_PRG = `
-// Plug in a mapper 0 cartridge's program ROM (16 KB or 32 KB).
-void bus_load_prg(const uint8_t *data, int size);
-`;
-  const DECL_READ16 = `
-// Read a 16-bit little-endian value through the bus.
-uint16_t bus_read16(uint16_t addr);
-`;
+  const BUS_CPP_1 = BUS_CPP_L12 + REGION;
+  const BUS_CPP_3 = D.busCpp;
+  const READ16 = BUS_CPP_3.slice(BUS_CPP_3.indexOf('\nstd::uint16_t Bus::read16'));
+  const BUS_CPP_2 = BUS_CPP_3.slice(0, BUS_CPP_3.length - READ16.length) + '';
+  if (!BUS_CPP_3.includes(REGION.trim())) throw new Error('nes-overview: bus.cpp versions disagree');
 
   const MONITOR = (level) => `// Opcode memory monitor. Commands (numbers in hex):
 //   r ADDR        read a byte
@@ -33,161 +32,55 @@ uint16_t bus_read16(uint16_t addr);
 //   m ADDR        name the region of an address${level >= 2 ? `
 //   p             plug in a 16 KB test cartridge` : ''}${level >= 3 ? `
 //   v             show the reset vector` : ''}
-#include <stdio.h>
-#include <stdint.h>
+#include <cstdint>
+#include <cstdio>
+#include <iostream>${level >= 2 ? '\n#include <vector>' : ''}
 #include "bus.h"
 ${level >= 2 ? `
-static uint8_t test_rom[0x4000];
+namespace {
 
-static void plug_test_cartridge(void) {
+void plug_test_cartridge(Bus& bus) {
+    std::vector<std::uint8_t> rom(0x4000);
     for (int i = 0; i < 0x4000; i++) {
-        test_rom[i] = (uint8_t)i;
+        rom[i] = static_cast<std::uint8_t>(i);
     }
-    test_rom[0x3FFC] = 0x00;  // reset vector: C000
-    test_rom[0x3FFD] = 0xC0;
-    bus_load_prg(test_rom, 0x4000);
-    printf("16 KB test cartridge plugged in\\n");
+    rom[0x3FFC] = 0x00;  // reset vector: C000
+    rom[0x3FFD] = 0xC0;
+    bus.load_prg(rom);
+    std::printf("16 KB test cartridge plugged in\\n");
 }
+
+}  // namespace
 ` : ''}
-int main(void) {
-    char cmd;
-    unsigned addr, value;
-    bus_reset();
-    while (scanf(" %c", &cmd) == 1) {
-        if (cmd == 'r' && scanf("%x", &addr) == 1) {
-            printf("%04X: %02X\\n", addr, bus_read((uint16_t)addr));
-        } else if (cmd == 'w' && scanf("%x %x", &addr, &value) == 2) {
-            bus_write((uint16_t)addr, (uint8_t)value);
-        } else if (cmd == 'm' && scanf("%x", &addr) == 1) {
-            printf("%04X: %s\\n", addr, bus_region((uint16_t)addr));${level >= 2 ? `
+int main() {
+    Bus bus;
+    bus.reset();
+    char cmd = 0;
+    unsigned addr = 0, value = 0;
+    std::cin >> std::hex;
+    while (std::cin >> cmd) {
+        if (cmd == 'r' && std::cin >> addr) {
+            std::printf("%04X: %02X\\n", addr, bus.read(static_cast<std::uint16_t>(addr)));
+        } else if (cmd == 'w' && std::cin >> addr >> value) {
+            bus.write(static_cast<std::uint16_t>(addr), static_cast<std::uint8_t>(value));
+        } else if (cmd == 'm' && std::cin >> addr) {
+            std::printf("%04X: %s\\n", addr, bus.region(static_cast<std::uint16_t>(addr)));${level >= 2 ? `
         } else if (cmd == 'p') {
-            plug_test_cartridge();` : ''}${level >= 3 ? `
+            plug_test_cartridge(bus);` : ''}${level >= 3 ? `
         } else if (cmd == 'v') {
-            printf("Reset vector: %04X\\n", bus_read16(0xFFFC));` : ''}
+            std::printf("Reset vector: %04X\\n", bus.read16(0xFFFC));` : ''}
         } else {
-            printf("Unknown command '%c'\\n", cmd);
+            std::printf("Unknown command '%c'\\n", cmd);
+            return 0;
         }
     }
-    return 0;
 }
 `;
 
-  const BUS_C_L11 = `#include <string.h>
-#include "bus.h"
-
-static uint8_t ram[0x800];
-
-void bus_reset(void) {
-    memset(ram, 0, sizeof ram);
-}
-
-uint8_t bus_read(uint16_t addr) {
-    if (addr < 0x2000) {
-        return ram[addr % 0x800];
-    }
-    return 0;
-}
-
-void bus_write(uint16_t addr, uint8_t value) {
-    if (addr < 0x2000) {
-        ram[addr % 0x800] = value;
-    }
-}
-`;
-
-  const BUS_C_1 = `#include <string.h>
-#include "bus.h"
-
-static uint8_t ram[0x800];
-
-void bus_reset(void) {
-    memset(ram, 0, sizeof ram);
-}
-
-uint8_t bus_read(uint16_t addr) {
-    if (addr < 0x2000) {
-        return ram[addr % 0x800];
-    }
-    return 0;
-}
-
-void bus_write(uint16_t addr, uint8_t value) {
-    if (addr < 0x2000) {
-        ram[addr % 0x800] = value;
-    }
-}
-
-const char *bus_region(uint16_t addr) {
-    if (addr < 0x2000) return "RAM";
-    if (addr < 0x4000) return "PPU";
-    if (addr < 0x4018) return "APU/IO";
-    if (addr < 0x4020) return "Disabled";
-    if (addr < 0x6000) return "Expansion";
-    if (addr < 0x8000) return "Cartridge RAM";
-    return "Cartridge ROM";
-}
-`;
-
-  const BUS_C_2 = `#include <string.h>
-#include "bus.h"
-
-static uint8_t ram[0x800];
-static uint8_t prg_ram[0x2000];
-static uint8_t prg_rom[0x8000];
-static int prg_size = 0;
-
-void bus_reset(void) {
-    memset(ram, 0, sizeof ram);
-    memset(prg_ram, 0, sizeof prg_ram);
-}
-
-void bus_load_prg(const uint8_t *data, int size) {
-    memcpy(prg_rom, data, size);
-    prg_size = size;
-}
-
-uint8_t bus_read(uint16_t addr) {
-    if (addr < 0x2000) {
-        return ram[addr % 0x800];
-    }
-    if (addr >= 0x6000 && addr < 0x8000) {
-        return prg_ram[addr - 0x6000];
-    }
-    if (addr >= 0x8000 && prg_size > 0) {
-        return prg_rom[(addr - 0x8000) % prg_size];
-    }
-    return 0;
-}
-
-void bus_write(uint16_t addr, uint8_t value) {
-    if (addr < 0x2000) {
-        ram[addr % 0x800] = value;
-    } else if (addr >= 0x6000 && addr < 0x8000) {
-        prg_ram[addr - 0x6000] = value;
-    }
-}
-
-const char *bus_region(uint16_t addr) {
-    if (addr < 0x2000) return "RAM";
-    if (addr < 0x4000) return "PPU";
-    if (addr < 0x4018) return "APU/IO";
-    if (addr < 0x4020) return "Disabled";
-    if (addr < 0x6000) return "Expansion";
-    if (addr < 0x8000) return "Cartridge RAM";
-    return "Cartridge ROM";
-}
-`;
-
-  const BUS_C_3 = BUS_C_2 + `
-uint16_t bus_read16(uint16_t addr) {
-    uint16_t lo = bus_read(addr);
-    uint16_t hi = bus_read((uint16_t)(addr + 1));
-    return (uint16_t)(hi << 8 | lo);
-}
-`;
-
-  const HARNESS_TOP = `#include <stdio.h>
-#include <stdint.h>
+  const HARNESS_TOP = `#include <cstdint>
+#include <cstdio>
+#include <iostream>
+#include <vector>
 #include "bus.h"
 `;
 
@@ -199,7 +92,7 @@ uint16_t bus_read16(uint16_t addr) {
     title: 'How a NES works',
     summary: 'The chips inside the console, what every address reaches, how a frame is timed, and the plan for your emulator.',
     blocks: [
-      { t: 'p', html: 'You now know enough C to build a computer. Before writing any of it, you need a map of the machine you are building. This lesson has no new C in it: it is the tour of the console, and the start of your emulator project.' },
+      { t: 'p', html: 'You now know enough C++ to build a computer. Before writing any of it, you need a map of the machine you are building. This lesson has no new C++ in it: it is the tour of the console, and the start of your emulator project.' },
 
       { t: 'h', text: 'What is inside the box' },
       { t: 'p', html: 'The Famicom came out in Japan in 1983 and the NES in America in 1985. Inside, the important parts are few:' },
@@ -229,7 +122,7 @@ uint16_t bus_read16(uint16_t addr) {
 </div>`, caption: 'Two separate buses. The CPU reaches the PPU only through its eight registers; the PPU reaches back with one wire, the NMI interrupt, at the start of every vertical blank.' },
 
       { t: 'h', text: 'A bus is a list of addresses' },
-      { t: 'p', html: 'The CPU puts a 16-bit address on its bus, from <code>$0000</code> to <code>$FFFF</code>, and reads or writes one byte there. (6502 programmers write hex with a dollar sign: <code>$FFFC</code> is <code>0xFFFC</code>.) Which chip answers depends only on the address. This table is the CPU\'s whole world, and it is exactly what your <code>bus.c</code> will implement:' },
+      { t: 'p', html: 'The CPU puts a 16-bit address on its bus, from <code>$0000</code> to <code>$FFFF</code>, and reads or writes one byte there. (6502 programmers write hex with a dollar sign: <code>$FFFC</code> is <code>0xFFFC</code>.) Which chip answers depends only on the address. This table is the CPU\'s whole world, and it is exactly what your <code>Bus</code> class will implement:' },
       { t: 'figure', html: `<div class="memmap">
   <div class="mm-row" style="--h:1.9"><span class="mm-addr">$0000</span><span class="mm-block ram"></span><span class="mm-label"><strong>Work RAM</strong>, 2 KB</span></div>
   <div class="mm-row" style="--h:2.4"><span class="mm-addr">$0800</span><span class="mm-block ram mirror"></span><span class="mm-label">Mirrors of the RAM, three more times</span></div>
@@ -266,26 +159,26 @@ uint16_t bus_read16(uint16_t addr) {
         ['Per frame', '89,342 dots, which is 29,780⅔ CPU cycles'],
         ['Frames per second', 'about 60.1'],
       ] },
-      { t: 'p', html: 'Each 6502 instruction takes between 2 and 7 CPU cycles. The emulator runs one instruction, notes how many cycles it took, and lets the PPU catch up by three times that many dots. You built exactly this clock in lesson 11.' },
+      { t: 'p', html: 'Each 6502 instruction takes between 2 and 7 CPU cycles. The emulator runs one instruction, notes how many cycles it took, and lets the PPU catch up by three times that many dots. You built exactly this clock in lesson 12.' },
 
       { t: 'h', text: 'The plan for your emulator' },
       { t: 'code', title: 'the main loop (a sketch)', lines: [
         ['while (running) {', 'The whole emulator is this loop, run about 1.79 million times per emulated second.'],
-        ['    int cycles = cpu_step();', 'Fetch the next instruction from the bus, do what it says, and return how many cycles it took. This is the next three lessons.'],
-        ['    ppu_tick(cycles * 3);', 'Let the PPU draw that many dots. When it reaches the vertical blank it raises the NMI line, which <code>cpu_step</code> notices next time.'],
-        ['    if (ppu_frame_done()) {', 'About 60 times a second a frame is finished.'],
-        ['        show_frame(ppu_pixels());', 'Copy the 256 × 240 pixels to the screen, here a canvas on the page.'],
+        ['    int cycles = cpu.step();', 'Fetch the next instruction from the bus, do what it says, and return how many cycles it took. This is the next three lessons.'],
+        ['    ppu.tick(cycles * 3);', 'Let the PPU draw that many dots. When it reaches the vertical blank it raises the NMI line, which the CPU notices next time.'],
+        ['    if (ppu.frame_done()) {', 'About 60 times a second a frame is finished.'],
+        ['        show_frame(ppu.pixels());', 'Copy the 256 × 240 pixels to the screen, here a canvas on the page.'],
         ['        read_controllers();', 'Turn the keyboard into button presses for the game.'],
         ['    }'],
         ['}'],
       ] },
-      { t: 'p', html: 'You will build it in the order the data flows: the bus (you have started it), the CPU, the cartridge, then the PPU, the controllers, and finally the extra mappers.' },
+      { t: 'p', html: 'You will build it in the order the data flows: the bus (you have started it), the CPU, the cartridge, then the PPU, the controllers, the extra mappers and the sound. Each part is a class, and the console holds one of each.' },
 
       { t: 'h', text: 'Your emulator project' },
       { t: 'p', html: 'From this lesson on, the workbench shows your <strong>emulator project</strong>. Unlike the earlier exercises, these files are kept from one exercise to the next and from one lesson to the next, and they grow into the finished emulator.' },
       { t: 'list', items: [
-        'Files with a padlock belong to the course: the test program, and headers that define how the modules talk to each other. You can read them, but not change them, so every lesson can rely on them.',
-        'Every other file is yours. Your <code>bus.c</code> from lesson 11 is the first one: if you solved that exercise, your own version is copied in.',
+        'Files with a padlock belong to the course: the test program, and headers that define how the parts talk to each other. You can read them, but not change them, so every lesson can rely on them.',
+        'Every other file is yours. Your <code>bus.cpp</code> from lesson 12 is the first one: if you solved that exercise, your own version is copied in.',
         'Reset restores only the open file, to how it was at the start of the current exercise.',
         'Download saves the whole project as a .zip, so you always have a copy outside the browser.',
       ] },
@@ -304,21 +197,21 @@ uint16_t bus_read16(uint16_t addr) {
       {
         id: 'nes-overview-1',
         title: 'Name every region',
-        prompt: '<p>Your <code>bus.c</code> is now part of the emulator project. Add a function to it that names the part of the console an address reaches, following the memory map in the lesson:</p><pre>const char *bus_region(uint16_t addr)</pre><table><tr><th>Addresses</th><th>Return</th></tr><tr><td><code>0000</code>-<code>1FFF</code></td><td><code>"RAM"</code></td></tr><tr><td><code>2000</code>-<code>3FFF</code></td><td><code>"PPU"</code></td></tr><tr><td><code>4000</code>-<code>4017</code></td><td><code>"APU/IO"</code></td></tr><tr><td><code>4018</code>-<code>401F</code></td><td><code>"Disabled"</code></td></tr><tr><td><code>4020</code>-<code>5FFF</code></td><td><code>"Expansion"</code></td></tr><tr><td><code>6000</code>-<code>7FFF</code></td><td><code>"Cartridge RAM"</code></td></tr><tr><td><code>8000</code>-<code>FFFF</code></td><td><code>"Cartridge ROM"</code></td></tr></table><p>The memory monitor in <code>main.c</code> lets you try it: <code>m 4016</code> names an address.</p>',
+        prompt: '<p>Your <code>bus.cpp</code> is now part of the emulator project, and <code>bus.h</code> has grown: it already declares everything this lesson builds, and the private members those functions need. (A declared function that nobody calls yet costs nothing.) First, write the member function that names the part of the console an address reaches, following the memory map in the lesson:</p><pre>const char* Bus::region(std::uint16_t addr) const</pre><table><tr><th>Addresses</th><th>Return</th></tr><tr><td><code>0000</code>-<code>1FFF</code></td><td><code>"RAM"</code></td></tr><tr><td><code>2000</code>-<code>3FFF</code></td><td><code>"PPU"</code></td></tr><tr><td><code>4000</code>-<code>4017</code></td><td><code>"APU/IO"</code></td></tr><tr><td><code>4018</code>-<code>401F</code></td><td><code>"Disabled"</code></td></tr><tr><td><code>4020</code>-<code>5FFF</code></td><td><code>"Expansion"</code></td></tr><tr><td><code>6000</code>-<code>7FFF</code></td><td><code>"Cartridge RAM"</code></td></tr><tr><td><code>8000</code>-<code>FFFF</code></td><td><code>"Cartridge ROM"</code></td></tr></table><p>The memory monitor in <code>main.cpp</code> lets you try it: <code>m 4016</code> names an address.</p>',
         project: {
-          course: { 'bus.h': BUS_H(DECL_REGION), 'main.c': MONITOR(1) },
-          learner: { 'bus.c': { starter: BUS_C_L11, from: { exercise: 'c-files-2', file: 'bus.c' } } },
-          open: 'bus.c',
+          course: { 'bus.h': BUS_H, 'main.cpp': MONITOR(1) },
+          learner: { 'bus.cpp': { starter: BUS_CPP_L12, from: { exercise: 'cpp-files-2', file: 'bus.cpp' } } },
+          open: 'bus.cpp',
         },
         stdin: 'm 0000\nm 1FFF\nm 2007\nm 4016\nm 8000',
-        harness: { 'main.c': HARNESS_TOP + `int main(void) {
+        harness: { 'main.cpp': HARNESS_TOP + R`int main() {
     int t = 0;
-    scanf("%d", &t);
-    const uint16_t a[] = {0x0000, 0x0800, 0x1FFF, 0x2000, 0x2007, 0x3FFF, 0x4000, 0x4016, 0x4017,
-                          0x4018, 0x401F, 0x4020, 0x5FFF, 0x6000, 0x7FFF, 0x8000, 0xC000, 0xFFFF};
+    std::cin >> t;
+    const Bus bus;
+    const std::uint16_t a[] = {0x0000, 0x0800, 0x1FFF, 0x2000, 0x2007, 0x3FFF, 0x4000, 0x4016, 0x4017,
+                               0x4018, 0x401F, 0x4020, 0x5FFF, 0x6000, 0x7FFF, 0x8000, 0xC000, 0xFFFF};
     int from = t == 1 ? 0 : t == 2 ? 6 : 12, to = t == 1 ? 6 : t == 2 ? 12 : 18;
-    for (int i = from; i < to; i++) printf("%04X %s\\n", a[i], bus_region(a[i]));
-    return 0;
+    for (int i = from; i < to; i++) std::printf("%04X %s\n", a[i], bus.region(a[i]));
 }
 ` },
         tests: [
@@ -327,33 +220,36 @@ uint16_t bus_read16(uint16_t addr) {
           { name: 'The cartridge', stdin: '3', expect: '5FFF Expansion\n6000 Cartridge RAM\n7FFF Cartridge RAM\n8000 Cartridge ROM\nC000 Cartridge ROM\nFFFF Cartridge ROM\n' },
         ],
         hints: [
-          'Check the ranges in increasing order, each with an upper limit: <code>if (addr &lt; 0x2000) return "RAM";</code>, then <code>if (addr &lt; 0x4000) return "PPU";</code> and so on.',
+          'Start with <code>const char* Bus::region(std::uint16_t addr) const {</code> (the <code>const</code> at the end has to match <code>bus.h</code>). Check the ranges in increasing order, each with an upper limit: <code>if (addr &lt; 0x2000) return "RAM";</code>, then <code>if (addr &lt; 0x4000) return "PPU";</code> and so on.',
           'Because each <code>if</code> returns, every later check already knows the address is above the earlier limits. The last line, with no <code>if</code>, returns <code>"Cartridge ROM"</code>.',
         ],
-        solution: { 'bus.c': BUS_C_1 },
+        solution: { 'bus.cpp': BUS_CPP_1 },
       },
       {
         id: 'nes-overview-2',
         title: 'Plug in a cartridge',
-        prompt: '<p>Time to connect the cartridge, mapper 0 style. Add to <code>bus.c</code>:</p><ul><li><strong>Cartridge RAM</strong>: 8 KB at <code>6000</code>-<code>7FFF</code> that can be read and written. <code>bus_reset</code> clears it, like the work RAM.</li><li><strong>Cartridge ROM</strong>: <code>void bus_load_prg(const uint8_t *data, int size)</code> copies the program ROM (<code>size</code> is 16384 or 32768) into a private array of 32 KB and remembers the size. Reads from <code>8000</code>-<code>FFFF</code> return ROM bytes; a 16 KB ROM appears twice, so use <code>(addr - 0x8000) % size</code>. Writes to ROM are ignored. Before any ROM is loaded, reads there return 0.</li></ul><p>Try it in the monitor: <code>p</code> plugs in a test cartridge whose bytes count up from 00.</p>',
+        prompt: '<p>Time to connect the cartridge, mapper 0 style. <code>bus.h</code> already has the private members for it: <code>prg_ram_</code>, an 8 KB <code>std::array</code>, and <code>prg_rom_</code>, a <code>std::vector</code> that starts empty. In <code>bus.cpp</code>:</p><ul><li><strong>Cartridge RAM</strong> at <code>6000</code>-<code>7FFF</code> can be read and written. <code>reset</code> clears it, like the work RAM.</li><li><strong>Cartridge ROM</strong>: write <code>void Bus::load_prg(const std::vector&lt;std::uint8_t&gt;&amp; prg)</code>, which keeps a copy of the program ROM (16 KB or 32 KB). Reads from <code>8000</code>-<code>FFFF</code> return ROM bytes; a 16 KB ROM appears twice, so use <code>(addr - 0x8000) % prg_rom_.size()</code>. Writes to ROM are ignored. Before any ROM is loaded, reads there return 0.</li></ul><p>Try it in the monitor: <code>p</code> plugs in a test cartridge whose bytes count up from 00.</p>',
         project: {
-          course: { 'bus.h': BUS_H(DECL_REGION + DECL_PRG), 'main.c': MONITOR(2) },
-          learner: { 'bus.c': { starter: BUS_C_1 } },
-          open: 'bus.c',
+          course: { 'bus.h': BUS_H, 'main.cpp': MONITOR(2) },
+          learner: { 'bus.cpp': { starter: BUS_CPP_1 } },
+          open: 'bus.cpp',
         },
         stdin: 'w 6000 42\nr 6000\np\nr 8005\nr C005\nr FFFD',
-        harness: { 'main.c': HARNESS_TOP + `static uint8_t rom[0x8000];
-int main(void) {
+        harness: { 'main.cpp': HARNESS_TOP + R`int main() {
     int t = 0;
-    scanf("%d", &t);
-    for (int i = 0; i < 0x8000; i++) rom[i] = (uint8_t)(i * 3 + (i >> 8));
-    bus_reset();
-    if (t == 1) { printf("%02X %02X\\n", bus_read(0x8000), bus_read(0xFFFF)); }
-    if (t == 2) { bus_load_prg(rom, 0x8000); printf("%02X %02X %02X %02X\\n", bus_read(0x8000), bus_read(0x8123), bus_read(0xC123), bus_read(0xFFFF)); }
-    if (t == 3) { bus_load_prg(rom, 0x4000); printf("%02X %02X %02X %02X\\n", bus_read(0x8123), bus_read(0xC123), bus_read(0xBFFF), bus_read(0xFFFF)); }
-    if (t == 4) { bus_load_prg(rom, 0x4000); rom[0] = 0x99; bus_write(0x8000, 0x55); bus_write(0xC000, 0x55); printf("%02X %02X\\n", bus_read(0x8000), bus_read(0xC000)); }
-    if (t == 5) { bus_write(0x6000, 0x11); bus_write(0x7FFF, 0x22); bus_write(0x0005, 0x33); printf("%02X %02X %02X %02X\\n", bus_read(0x6000), bus_read(0x7FFF), bus_read(0x6005), bus_read(0x0805)); bus_reset(); printf("%02X %02X\\n", bus_read(0x6000), bus_read(0x7FFF)); }
-    return 0;
+    std::cin >> t;
+    std::vector<std::uint8_t> rom(0x8000);
+    for (int i = 0; i < 0x8000; i++) rom[i] = static_cast<std::uint8_t>(i * 3 + (i >> 8));
+    std::vector<std::uint8_t> half(rom.begin(), rom.begin() + 0x4000);
+    Bus bus;
+    bus.reset();
+    auto show = [&](std::uint16_t a) { std::printf("%02X ", bus.read(a)); };
+    if (t == 1) { show(0x8000); show(0xFFFF); }
+    if (t == 2) { bus.load_prg(rom); show(0x8000); show(0x8123); show(0xC123); show(0xFFFF); }
+    if (t == 3) { bus.load_prg(half); show(0x8123); show(0xC123); show(0xBFFF); show(0xFFFF); }
+    if (t == 4) { bus.load_prg(half); half[0] = 0x99; bus.write(0x8000, 0x55); bus.write(0xC000, 0x55); show(0x8000); show(0xC000); }
+    if (t == 5) { bus.write(0x6000, 0x11); bus.write(0x7FFF, 0x22); bus.write(0x0005, 0x33); show(0x6000); show(0x7FFF); show(0x6005); show(0x0805); std::printf("\n"); bus.reset(); show(0x6000); show(0x7FFF); }
+    std::printf("\n");
 }
 ` },
         tests: [
@@ -363,35 +259,36 @@ int main(void) {
           { name: 'The ROM is copied, and writes to it are ignored', stdin: '4', expect: '00 00\n' },
           { name: 'Cartridge RAM reads, writes and resets', stdin: '5', expect: '11 22 00 33\n00 00\n' },
         ],
-        rules: [{ re: 'static\\s+uint8_t\\s+\\w+\\s*\\[\\s*0x8000\\s*\\]', must: true, msg: 'Keep the ROM in a private array of 32 KB: static uint8_t prg_rom[0x8000];' }],
         hints: [
-          'You need three new private variables: <code>static uint8_t prg_ram[0x2000];</code>, <code>static uint8_t prg_rom[0x8000];</code> and <code>static int prg_size = 0;</code>. <code>bus_load_prg</code> is a <code>memcpy</code> plus remembering the size.',
-          'In <code>bus_read</code>, add two more cases after the RAM one: <code>addr &gt;= 0x6000 &amp;&amp; addr &lt; 0x8000</code> reads <code>prg_ram[addr - 0x6000]</code>, and <code>addr &gt;= 0x8000 &amp;&amp; prg_size &gt; 0</code> reads <code>prg_rom[(addr - 0x8000) % prg_size]</code>. Only the RAM case goes into <code>bus_write</code>.',
+          '<code>load_prg</code> is one line: assigning a vector copies it, <code>prg_rom_ = prg;</code>. In <code>reset</code>, add <code>prg_ram_.fill(0);</code>.',
+          'In <code>read</code>, add two more cases after the RAM one: <code>addr &gt;= 0x6000 &amp;&amp; addr &lt; 0x8000</code> reads <code>prg_ram_[addr - 0x6000]</code>, and <code>addr &gt;= 0x8000 &amp;&amp; !prg_rom_.empty()</code> reads <code>prg_rom_[(addr - 0x8000) % prg_rom_.size()]</code>. Only the cartridge RAM case goes into <code>write</code>.',
         ],
-        solution: { 'bus.c': BUS_C_2 },
+        solution: { 'bus.cpp': BUS_CPP_2 },
       },
       {
         id: 'nes-overview-3',
         title: 'Follow the reset vector',
-        prompt: '<p>The first thing the CPU does is read the reset vector. Add <code>uint16_t bus_read16(uint16_t addr)</code> to <code>bus.c</code>: it reads the low byte at <code>addr</code> and the high byte at <code>addr + 1</code>, <em>through <code>bus_read</code></em>, so the memory map and the mirrors apply. If <code>addr</code> is <code>FFFF</code>, the high byte comes from <code>0000</code>.</p><p>In the monitor, <code>p</code> then <code>v</code> should print <code>Reset vector: C000</code>. In the next lesson, that is where your CPU starts.</p>',
+        prompt: '<p>The first thing the CPU does is read the reset vector. Write <code>std::uint16_t Bus::read16(std::uint16_t addr)</code>: it reads the low byte at <code>addr</code> and the high byte at <code>addr + 1</code>, <em>through <code>read</code></em>, so the memory map and the mirrors apply. If <code>addr</code> is <code>FFFF</code>, the high byte comes from <code>0000</code>.</p><p>In the monitor, <code>p</code> then <code>v</code> should print <code>Reset vector: C000</code>. In the next lesson, that is where your CPU starts.</p>',
         project: {
-          course: { 'bus.h': BUS_H(DECL_REGION + DECL_PRG + DECL_READ16), 'main.c': MONITOR(3) },
-          learner: { 'bus.c': { starter: BUS_C_2 } },
-          open: 'bus.c',
+          course: { 'bus.h': BUS_H, 'main.cpp': MONITOR(3) },
+          learner: { 'bus.cpp': { starter: BUS_CPP_2 } },
+          open: 'bus.cpp',
         },
         stdin: 'p\nv',
-        harness: { 'main.c': HARNESS_TOP + `static uint8_t rom[0x4000];
-int main(void) {
+        harness: { 'main.cpp': HARNESS_TOP + R`int main() {
     int t = 0;
-    scanf("%d", &t);
-    bus_reset();
-    for (int i = 0; i < 0x4000; i++) rom[i] = (uint8_t)(0xFF - i);
+    std::cin >> t;
+    Bus bus;
+    bus.reset();
+    std::vector<std::uint8_t> rom(0x4000);
+    for (int i = 0; i < 0x4000; i++) rom[i] = static_cast<std::uint8_t>(0xFF - i);
     rom[0x3FFA] = 0x34; rom[0x3FFB] = 0x12; rom[0x3FFC] = 0x00; rom[0x3FFD] = 0xC0; rom[0x3FFE] = 0xEF; rom[0x3FFF] = 0xBE;
-    bus_load_prg(rom, 0x4000);
-    if (t == 1) printf("%04X %04X %04X\\n", bus_read16(0xFFFA), bus_read16(0xFFFC), bus_read16(0xFFFE));
-    if (t == 2) { bus_write(0x0010, 0xCD); bus_write(0x0011, 0xAB); printf("%04X %04X\\n", bus_read16(0x0010), bus_read16(0x1810)); }
-    if (t == 3) { bus_write(0x0000, 0x77); printf("%04X %04X\\n", bus_read16(0xFFFF), bus_read16(0xBFFC)); }
-    return 0;
+    bus.load_prg(rom);
+    auto show = [&](std::uint16_t a) { std::printf("%04X ", bus.read16(a)); };
+    if (t == 1) { show(0xFFFA); show(0xFFFC); show(0xFFFE); }
+    if (t == 2) { bus.write(0x0010, 0xCD); bus.write(0x0011, 0xAB); show(0x0010); show(0x1810); }
+    if (t == 3) { bus.write(0x0000, 0x77); show(0xFFFF); show(0xBFFC); }
+    std::printf("\n");
 }
 ` },
         tests: [
@@ -399,12 +296,12 @@ int main(void) {
           { name: 'Through RAM and its mirrors', stdin: '2', expect: 'ABCD ABCD\n' },
           { name: 'Wrapping at FFFF, and the ROM mirror', stdin: '3', expect: '77BE C000\n' },
         ],
-        rules: [{ re: 'bus_read16[\\s\\S]*bus_read\\s*\\(', must: true, msg: 'Read both bytes through bus_read, so the memory map applies.' }],
+        rules: [{ re: 'read16[\\s\\S]*\\bread\\s*\\(', must: true, msg: 'Read both bytes with read(), so the memory map applies.' }],
         hints: [
-          'This is <code>read16</code> from lesson 10, but with <code>bus_read(addr)</code> instead of <code>mem[addr]</code>.',
-          '<code>uint16_t lo = bus_read(addr); uint16_t hi = bus_read((uint16_t)(addr + 1)); return (uint16_t)(hi &lt;&lt; 8 | lo);</code>',
+          'This is <code>read16</code> from lesson 10, but with <code>read(addr)</code> instead of <code>mem[addr]</code>. Inside a member function of <code>Bus</code>, <code>read</code> is the bus\'s own <code>read</code>.',
+          '<code>std::uint16_t lo = read(addr); std::uint16_t hi = read(static_cast&lt;std::uint16_t&gt;(addr + 1)); return static_cast&lt;std::uint16_t&gt;(hi &lt;&lt; 8 | lo);</code>',
         ],
-        solution: { 'bus.c': BUS_C_3 },
+        solution: { 'bus.cpp': BUS_CPP_3 },
       },
     ],
   });

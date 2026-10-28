@@ -202,7 +202,7 @@ void hexdump(const std::vector<std::uint8_t>& data, std::uint16_t base) {
     {
       id: 'cpp-files-2',
       title: 'The bus, version 1',
-      prompt: '<p>The <em>bus</em> connects the CPU to everything else: every read and write the CPU makes goes through it. <code>bus.h</code> declares the <code>Bus</code> class, with the console\'s 2 KB of RAM as a private <code>std::array</code>. Write its member functions in <code>bus.cpp</code>:</p><ul><li><code>void reset()</code>: sets all of RAM to 0.</li><li><code>std::uint8_t read(std::uint16_t addr) const</code>: addresses <code>0x0000</code>-<code>0x1FFF</code> read RAM, mirrored every <code>0x800</code> bytes (you did this in lesson 4). Every other address returns 0 for now.</li><li><code>void write(std::uint16_t addr, std::uint8_t value)</code>: writes RAM the same way. Writes to every other address are ignored for now.</li></ul><p><code>main.cpp</code> runs commands so you can try it: <code>w 0801 AB</code> writes, <code>r 0001</code> reads, <code>z 0</code> resets. Do not change it or <code>bus.h</code>.</p>',
+      prompt: '<p>The <em>bus</em> connects the CPU to everything else: every read and write the CPU makes goes through it. <code>bus.h</code> declares the <code>Bus</code> class, with the console\'s 2 KB of RAM as a private <code>std::array</code>. Write its member functions in <code>bus.cpp</code>:</p><ul><li><code>void reset()</code>: sets all of RAM to 0.</li><li><code>std::uint8_t read(std::uint16_t addr)</code>: addresses <code>0x0000</code>-<code>0x1FFF</code> read RAM, mirrored every <code>0x800</code> bytes (you did this in lesson 4). Every other address returns 0 for now.</li><li><code>void write(std::uint16_t addr, std::uint8_t value)</code>: writes RAM the same way. Writes to every other address are ignored for now.</li></ul><p><code>main.cpp</code> runs commands so you can try it: <code>w 0801 AB</code> writes, <code>r 0001</code> reads, <code>z 0</code> resets. Do not change it or <code>bus.h</code>.</p>',
       files: {
         'main.cpp': R`#include <cstdio>
 #include <iostream>
@@ -232,7 +232,9 @@ int main() {
 class Bus {
 public:
     void reset();
-    std::uint8_t read(std::uint16_t addr) const;
+    // Not const: on the real console, reading some addresses changes
+    // something (a PPU register, for example).
+    std::uint8_t read(std::uint16_t addr);
     void write(std::uint16_t addr, std::uint8_t value);
 
 private:
@@ -252,7 +254,7 @@ private:
         { name: 'reset clears RAM', stdin: 'w 0010 77\nz 0\nr 0010', expect: '0010: 00\n' },
       ],
       hints: [
-        'Each definition starts with <code>Bus::</code>, and <code>read</code> keeps its <code>const</code>: <code>std::uint8_t Bus::read(std::uint16_t addr) const { ... }</code>',
+        'Each definition starts with <code>Bus::</code>: <code>std::uint8_t Bus::read(std::uint16_t addr) { ... }</code>',
         '<code>reset</code> can be <code>ram_.fill(0);</code>. In <code>read</code> and <code>write</code>, check <code>addr &lt; 0x2000</code> and use <code>ram_[addr % 0x800]</code> (or <code>ram_[addr &amp; 0x7FF]</code>).',
       ],
       solution: { 'bus.cpp': R`#include "bus.h"
@@ -261,7 +263,7 @@ void Bus::reset() {
     ram_.fill(0);
 }
 
-std::uint8_t Bus::read(std::uint16_t addr) const {
+std::uint8_t Bus::read(std::uint16_t addr) {
     if (addr < 0x2000) {
         return ram_[addr & 0x7FF];
     }

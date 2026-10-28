@@ -7,10 +7,10 @@
     title: 'The 6502: registers and the bus',
     summary: 'What is inside the CPU, how it runs a program one byte at a time, and the first instructions of your own 6502.',
     blocks: [
-      { t: 'p', html: 'The 6502 was designed in 1975 to be cheap, and it shows: it has very few parts. That makes it a perfect first processor to build. Over this lesson and the next two you will write all of it, in one file, <code>cpu.c</code>, and by the end it will run the same test program that real emulator authors use to prove their CPU is right.' },
+      { t: 'p', html: 'The 6502 was designed in 1975 to be cheap, and it shows: it has very few parts. That makes it a perfect first processor to build. Over this lesson and the next two you will write all of it, as one class, <code>Cpu</code>, in <code>cpu.h</code> and <code>cpu.cpp</code>, and by the end it will run the same test program that real emulator authors use to prove their CPU is right.' },
 
       { t: 'h', text: 'Six registers' },
-      { t: 'p', html: 'A <em>register</em> is a variable that lives inside the processor. The 6502 has six, and your <code>Cpu</code> struct in <code>cpu.h</code> has one field for each:' },
+      { t: 'p', html: 'A <em>register</em> is a variable that lives inside the processor. The 6502 has six, and your <code>Cpu</code> class in <code>cpu.h</code> has one member for each:' },
       { t: 'table', head: ['Register', 'Size', 'What it is for'], rows: [
         ['<code>A</code>, the accumulator', '8 bits', 'Where arithmetic and logic happen. Most data passes through it.'],
         ['<code>X</code> and <code>Y</code>', '8 bits', 'Index registers: counters, and offsets added to addresses (like <code>i</code> in <code>a[i]</code>).'],
@@ -47,29 +47,31 @@
         ['<code>E8</code>', '<code>INX</code>', 'Add 1 to X.'],
         ['<code>4C 00 C0</code>', '<code>JMP $C000</code>', 'Continue at <code>$C000</code>. The address is two bytes, low byte first.'],
       ] },
-      { t: 'p', html: 'In C, decoding is a <code>switch</code> on the opcode, exactly like your opcode decoder in lesson 3. The skeleton of the whole CPU is this:' },
-      { t: 'code', title: 'cpu.c (the shape)', lines: [
-        ['static uint8_t fetch(Cpu *cpu) {', '<code>static</code>: only <code>cpu.c</code> needs this helper (lesson 11).'],
-        ['    return bus_read(cpu->pc++);', 'Read the byte at PC through the bus, then move PC on. <code>pc++</code> uses the old value, then adds one.'],
+      { t: 'p', html: 'In C++, decoding is a <code>switch</code> on the opcode, exactly like your opcode decoder in lesson 3. The skeleton of the whole CPU is this:' },
+      { t: 'code', title: 'cpu.cpp (the shape)', lines: [
+        ['std::uint8_t Cpu::fetch() {', 'A private member function: <code>cpu.h</code> declares it, and only the CPU\'s own code can call it.'],
+        ['    return bus_.read(pc++);', 'Read the byte at PC through the bus, then move PC on. <code>pc++</code> uses the old value, then adds one. <code>bus_</code> is the reference to the bus that the CPU was given when it was created.'],
         ['}'],
         [''],
-        ['int cpu_step(Cpu *cpu) {'],
-        ['    uint8_t opcode = fetch(cpu);'],
-        ['    int cycles = 2;'],
+        ['int Cpu::step() {'],
+        ['    std::uint8_t opcode = fetch();'],
+        ['    int cost = 2;', 'How many cycles this instruction takes.'],
         ['    switch (opcode) {'],
         ['    case 0xEA:              // NOP', 'One <code>case</code> per opcode. NOP does nothing, which still takes 2 cycles.'],
-        ['        cycles = 2;'],
+        ['        cost = 2;'],
         ['        break;'],
         ['    case 0xE8:              // INX'],
-        ['        cpu->x++;', '<code>x</code> is a <code>uint8_t</code>, so 255 + 1 wraps to 0, just like the real register.'],
-        ['        set_zn(cpu, cpu->x);', 'Update Z and N from the new value.'],
-        ['        cycles = 2;'],
+        ['        x++;', '<code>x</code> is a <code>std::uint8_t</code>, so 255 + 1 wraps to 0, just like the real register.'],
+        ['        set_zn(x);', 'Update Z and N from the new value.'],
+        ['        cost = 2;'],
         ['        break;'],
         ['    }'],
-        ['    cpu->cycles += cycles;', 'Keep the running total. The PPU will use it to stay in step.'],
-        ['    return cycles;'],
+        ['    cycles += cost;', 'Keep the running total in the <code>cycles</code> member. The PPU will use it to stay in step.'],
+        ['    return cost;'],
         ['}'],
       ] },
+      { t: 'p', html: '<code>cpu.h</code> is yours too, and it already declares every private helper the next three lessons use: flags, fetching, the stack, addressing modes and the instructions. You write their bodies in <code>cpu.cpp</code> one lesson at a time. A declared function that nobody calls yet costs nothing, but one that is called without a body gives a link error that names it.' },
+      { t: 'p', html: 'The CPU does not own the bus: the console has one bus that the CPU, and later the PPU, all use. So <code>Cpu</code> holds a <em>reference</em> to it, given to its constructor: <code>Bus bus; Cpu cpu(bus);</code>. That is the pattern from lesson 7: a reference for something that is always there and that somebody else owns.' },
 
       { t: 'h', text: 'Cycles' },
       { t: 'p', html: 'Every instruction takes a fixed number of CPU cycles, from 2 to 7, and sometimes one or two more in special cases you will meet in the next lesson. The tables in these lessons give the count for every opcode. Getting cycles exactly right matters: the picture chip runs 3 dots per cycle, and games rely on that timing.' },
@@ -80,12 +82,12 @@
         ['<code>A</code>, <code>X</code>, <code>Y</code>', '<code>$00</code>', 'A clean start.'],
         ['<code>SP</code>', '<code>$FD</code>', 'The reset sequence moves the stack pointer down three times from <code>$00</code>, without writing anything.'],
         ['<code>P</code>', '<code>$24</code>', 'Interrupt disable on, plus bit 5, which always reads as 1.'],
-        ['<code>PC</code>', 'the reset vector', 'Read from <code>$FFFC</code> and <code>$FFFD</code>, with your <code>bus_read16</code>.'],
+        ['<code>PC</code>', 'the reset vector', 'Read from <code>$FFFC</code> and <code>$FFFD</code>, with your <code>Bus::read16</code>.'],
         ['cycles', '7', 'The reset sequence itself takes 7 cycles.'],
       ] },
 
       { t: 'h', text: 'Your test bench' },
-      { t: 'p', html: 'For the next exercises, <code>main.c</code> is a test bench. You type a program as hex bytes into Program input, it puts them in a test cartridge at <code>$C000</code>, resets your CPU and runs it, printing one line per instruction <em>before</em> running it:' },
+      { t: 'p', html: 'For the next exercises, <code>main.cpp</code> is a test bench. You type a program as hex bytes into Program input, it puts them in a test cartridge at <code>$C000</code>, resets your CPU and runs it, printing one line per instruction <em>before</em> running it:' },
       { t: 'code', title: 'Program input → console', lines: [
         ['A9 05 AA E8'],
         [''],
@@ -94,11 +96,11 @@
         ['C003  E8        INX         A:05 X:05 Y:00 P:24 SP:FD CYC:11'],
         ['End   (BRK) A:05 X:06 Y:00 P:24 SP:FD CYC:13', 'It stops at the first <code>00</code> byte, BRK, which is what empty cartridge space contains.'],
       ] },
-      { t: 'p', html: 'This is the same layout as the nestest log, so the habit of reading it will pay off in lesson 15. The other files with a padlock (<code>cpu.h</code>, <code>trace.c</code>) belong to the course: <code>trace.c</code> is a disassembler that turns bytes back into readable instructions for these lines.' },
+      { t: 'p', html: 'This is the same layout as the nestest log, so the habit of reading it will pay off in lesson 16. The other files with a padlock (<code>bus.h</code>, <code>trace.h</code>, <code>trace.cpp</code>) belong to the course: <code>trace.cpp</code> is a disassembler that turns bytes back into readable instructions for these lines.' },
 
       { t: 'h', text: 'The stack' },
       { t: 'p', html: 'The stack is page 1 of memory, <code>$0100</code> to <code>$01FF</code>, used as a pile of bytes. <code>SP</code> holds the low byte of the next free slot. Pushing writes at <code>$0100 + SP</code> and then decreases <code>SP</code>; pulling increases <code>SP</code> first and then reads. So the stack grows <em>down</em>, from <code>$01FF</code> towards <code>$0100</code>.' },
-      { t: 'p', html: 'Games use it to save registers (<code>PHA</code> pushes A, <code>PLA</code> pulls it back) and the CPU uses it for return addresses when calling subroutines, which you will add in lesson 15.' },
+      { t: 'p', html: 'Games use it to save registers (<code>PHA</code> pushes A, <code>PLA</code> pulls it back) and the CPU uses it for return addresses when calling subroutines, which you will add in lesson 16.' },
       { t: 'note', kind: 'warn', html: '<code>PHP</code> pushes a copy of <code>P</code> with bits 4 (B) and 5 set. <code>PLP</code> pulls into <code>P</code> but ignores bit 4 and keeps bit 5 set. It is an odd rule, and the test log checks it.' },
 
       { t: 'quiz', q: 'SP is <code>$FD</code>. The program runs <code>PHA</code>. Where does A go, and what is SP afterwards?', options: ['<code>$01FD</code>, then SP is <code>$FC</code>', '<code>$01FC</code>, then SP is <code>$FC</code>', '<code>$00FD</code>, then SP is <code>$FE</code>'], answer: 0, explain: 'Push writes at <code>$0100 + SP</code> first, then decreases SP.' },
@@ -110,29 +112,29 @@
         id: 'nes-cpu-bus-1',
         stage: 1,
         title: 'Power on',
-        prompt: `<p>Start <code>cpu.c</code>, the heart of the emulator. Write:</p>
+        prompt: `<p>Start <code>cpu.cpp</code>, the heart of the emulator. Write these member functions of <code>Cpu</code>:</p>
 <ul>
-<li><code>static uint8_t fetch(Cpu *cpu)</code>: returns the byte at <code>pc</code> (through <code>bus_read</code>) and adds 1 to <code>pc</code>.</li>
-<li><code>static uint16_t fetch16(Cpu *cpu)</code>: two fetches, low byte first.</li>
-<li><code>cpu_reset</code>: A, X and Y to 0, SP to <code>$FD</code>, P to <code>FLAG_I | FLAG_U</code> (<code>$24</code>), PC from the reset vector with <code>bus_read16(0xFFFC)</code>, and <code>cycles</code> to 7.</li>
-<li><code>cpu_step</code>: fetch the opcode, then a <code>switch</code> with two instructions. Any other opcode counts as 2 cycles and does nothing. Add the cycles to <code>cpu-&gt;cycles</code> and return them.</li>
+<li><code>std::uint8_t Cpu::fetch()</code>: returns the byte at <code>pc</code> (through <code>bus_.read</code>) and adds 1 to <code>pc</code>.</li>
+<li><code>std::uint16_t Cpu::fetch16()</code>: two fetches, low byte first.</li>
+<li><code>Cpu::reset</code>: A, X and Y to 0, SP to <code>$FD</code>, P to <code>kFlagI | kFlagU</code> (<code>$24</code>), PC from the reset vector with <code>bus_.read16(0xFFFC)</code>, and <code>cycles</code> to 7.</li>
+<li><code>Cpu::step</code>: fetch the opcode, then a <code>switch</code> with two instructions. Any other opcode counts as 2 cycles and does nothing. Add the cycles to <code>cycles</code> and return them.</li>
 </ul>
 <table><tr><th>Bytes</th><th>Instruction</th><th>Cycles</th><th>Does</th></tr>
 <tr><td><code>EA</code></td><td>NOP</td><td>2</td><td>nothing</td></tr>
 <tr><td><code>4C lo hi</code></td><td>JMP $hilo</td><td>3</td><td>PC becomes the two operand bytes, low byte first</td></tr></table>`,
         hints: [
-          '<code>cpu_reset</code> is six assignments. For PC: <code>cpu-&gt;pc = bus_read16(0xFFFC);</code>',
-          'In <code>cpu_step</code>: <code>uint8_t opcode = fetch(cpu); int cycles = 2; switch (opcode) { case 0xEA: cycles = 2; break; case 0x4C: cpu-&gt;pc = fetch16(cpu); cycles = 3; break; } cpu-&gt;cycles += cycles; return cycles;</code>',
+          '<code>Cpu::reset</code> is six assignments to the members. For PC: <code>pc = bus_.read16(0xFFFC);</code>',
+          'In <code>Cpu::step</code>: <code>std::uint8_t opcode = fetch(); int cost = 2; switch (opcode) { case 0xEA: cost = 2; break; case 0x4C: pc = fetch16(); cost = 3; break; } cycles += cost; return cost;</code>',
         ],
       }),
       C.exercise({
         id: 'nes-cpu-bus-2',
         stage: 2,
         title: 'Registers and flags',
-        prompt: `<p>Add three flag helpers to <code>cpu.c</code> (you wrote the first two in lesson 10):</p>
-<pre>static void set_flag(Cpu *cpu, uint8_t flag, int on)
-static int get_flag(const Cpu *cpu, uint8_t flag)
-static void set_zn(Cpu *cpu, uint8_t value)  // Z if value is 0, N if bit 7 is set</pre>
+        prompt: `<p>Write the three flag helpers that <code>cpu.h</code> declares (you wrote the first two in lesson 10):</p>
+<pre>void Cpu::set_flag(std::uint8_t flag, bool on)
+bool Cpu::get_flag(std::uint8_t flag) const
+void Cpu::set_zn(std::uint8_t value)   // Z if value is 0, N if bit 7 is set</pre>
 <p>Then these instructions. All are 2 cycles.</p>
 <ul>
 <li><strong>Immediate loads</strong> <code>LDA #</code> (<code>A9</code>), <code>LDX #</code> (<code>A2</code>), <code>LDY #</code> (<code>A0</code>): the operand is the next byte. Set Z and N.</li>
@@ -141,8 +143,8 @@ static void set_zn(Cpu *cpu, uint8_t value)  // Z if value is 0, N if bit 7 is s
 <li><strong>Flags</strong>: <code>CLC</code> <code>18</code> and <code>SEC</code> <code>38</code> clear and set C; <code>CLI</code> <code>58</code> and <code>SEI</code> <code>78</code> for I; <code>CLD</code> <code>D8</code> and <code>SED</code> <code>F8</code> for D; <code>CLV</code> <code>B8</code> clears V. These change only their own flag.</li>
 </ul>`,
         hints: [
-          '<code>set_zn</code>: <code>set_flag(cpu, FLAG_Z, value == 0); set_flag(cpu, FLAG_N, value &amp; 0x80);</code>',
-          'Each instruction is one line, for example <code>case 0xA9: cpu-&gt;a = fetch(cpu); set_zn(cpu, cpu-&gt;a); cycles = 2; break;</code> and <code>case 0x38: set_flag(cpu, FLAG_C, 1); cycles = 2; break;</code>',
+          '<code>set_zn</code>: <code>set_flag(kFlagZ, value == 0); set_flag(kFlagN, value &amp; 0x80);</code> (a non-zero number becomes <code>true</code> when it is passed as a <code>bool</code>). To clear a flag, <code>p &amp;= static_cast&lt;std::uint8_t&gt;(~flag);</code>',
+          'Each instruction is one line, for example <code>case 0xA9: a = fetch(); set_zn(a); cost = 2; break;</code> and <code>case 0x38: set_flag(kFlagC, true); cost = 2; break;</code>',
         ],
       }),
       C.exercise({
@@ -150,19 +152,19 @@ static void set_zn(Cpu *cpu, uint8_t value)  // Z if value is 0, N if bit 7 is s
         stage: 3,
         title: 'The stack',
         prompt: `<p>Add the stack. First two helpers:</p>
-<pre>static void push(Cpu *cpu, uint8_t value)  // write at 0x0100 | sp, then sp--
-static uint8_t pull(Cpu *cpu)               // sp++, then read 0x0100 | sp</pre>
+<pre>void Cpu::push(std::uint8_t value)   // write at 0x0100 | sp, then sp--
+std::uint8_t Cpu::pull()             // sp++, then read 0x0100 | sp</pre>
 <p>Then six instructions:</p>
 <table><tr><th>Opcode</th><th>Instruction</th><th>Cycles</th><th>Does</th></tr>
 <tr><td><code>48</code></td><td>PHA</td><td>3</td><td>push A</td></tr>
-<tr><td><code>08</code></td><td>PHP</td><td>3</td><td>push P with bits 4 and 5 set: <code>cpu-&gt;p | FLAG_B | FLAG_U</code></td></tr>
+<tr><td><code>08</code></td><td>PHP</td><td>3</td><td>push P with bits 4 and 5 set: <code>p | kFlagB | kFlagU</code></td></tr>
 <tr><td><code>68</code></td><td>PLA</td><td>4</td><td>pull into A, set Z and N</td></tr>
 <tr><td><code>28</code></td><td>PLP</td><td>4</td><td>pull into P, but clear B and set bit 5</td></tr>
 <tr><td><code>BA</code></td><td>TSX</td><td>2</td><td>copy SP to X, set Z and N</td></tr>
 <tr><td><code>9A</code></td><td>TXS</td><td>2</td><td>copy X to SP, no flags</td></tr></table>`,
         hints: [
-          '<code>push</code>: <code>bus_write(0x0100 | cpu-&gt;sp, value); cpu-&gt;sp--;</code> and <code>pull</code> is the reverse order: <code>cpu-&gt;sp++; return bus_read(0x0100 | cpu-&gt;sp);</code>',
-          'PLP: <code>cpu-&gt;p = (pull(cpu) &amp; (uint8_t)~FLAG_B) | FLAG_U;</code>',
+          '<code>push</code>: <code>bus_.write(0x0100 | sp, value); sp--;</code> and <code>pull</code> is the reverse order: <code>sp++; return bus_.read(0x0100 | sp);</code>',
+          'PLP: <code>p = (pull() &amp; static_cast&lt;std::uint8_t&gt;(~kFlagB)) | kFlagU;</code>',
         ],
       }),
     ],

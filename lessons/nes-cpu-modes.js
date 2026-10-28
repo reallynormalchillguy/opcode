@@ -27,24 +27,24 @@
       ] },
 
       { t: 'h', text: 'Immediate is an address too' },
-      { t: 'p', html: 'In the last lesson you wrote <code>LDA #</code> as <code>cpu-&gt;a = fetch(cpu)</code>. There is a neater way to see it: an immediate operand is the byte at address <code>PC</code>. So the immediate "mode" can return an address, <code>pc++</code>, just like every other mode. Then each operation is written once and takes an address:' },
-      { t: 'code', title: 'cpu.c', lines: [
-        ['static uint16_t addr_imm(Cpu *cpu) {', 'Returns where the operand is: right here in the program.'],
-        ['    return cpu->pc++;'],
+      { t: 'p', html: 'In the last lesson you wrote <code>LDA #</code> as <code>a = fetch();</code>. There is a neater way to see it: an immediate operand is the byte at address <code>PC</code>. So the immediate "mode" can return an address, <code>pc++</code>, just like every other mode. Then each operation is written once and takes an address:' },
+      { t: 'code', title: 'cpu.cpp', lines: [
+        ['std::uint16_t Cpu::addr_imm() {', 'Returns where the operand is: right here in the program.'],
+        ['    return pc++;'],
         ['}'],
         [''],
-        ['static uint16_t addr_zpx(Cpu *cpu) {'],
-        ['    return (uint8_t)(fetch(cpu) + cpu->x);', 'The cast to <code>uint8_t</code> keeps the result in the zero page: <code>$FF + 2</code> is <code>$01</code>, not <code>$0101</code>. The real chip does exactly this.'],
+        ['std::uint16_t Cpu::addr_zpx() {'],
+        ['    return static_cast<std::uint8_t>(fetch() + x);', 'The cast to <code>std::uint8_t</code> keeps the result in the zero page: <code>$FF + 2</code> is <code>$01</code>, not <code>$0101</code>. The real chip does exactly this.'],
         ['}'],
         [''],
-        ['static void lda(Cpu *cpu, uint16_t addr) {', 'The operation does not care where the address came from.'],
-        ['    cpu->a = bus_read(addr);'],
-        ['    set_zn(cpu, cpu->a);'],
+        ['void Cpu::lda(std::uint16_t addr) {', 'The operation does not care where the address came from.'],
+        ['    a = bus_.read(addr);'],
+        ['    set_zn(a);'],
         ['}'],
         [''],
-        ['/* in cpu_step: */'],
-        ['case 0xA9: lda(cpu, addr_imm(cpu)); cycles = 2; break;', 'Each opcode is now one line: an operation, a mode and a cycle count.'],
-        ['case 0xB5: lda(cpu, addr_zpx(cpu)); cycles = 4; break;'],
+        ['// in Cpu::step:'],
+        ['case 0xA9: lda(addr_imm()); cost = 2; break;', 'Each opcode is now one line: an operation, a mode and a cycle count.'],
+        ['case 0xB5: lda(addr_zpx()); cost = 4; break;'],
       ] },
 
       { t: 'h', text: 'The zero page is special' },
@@ -53,22 +53,20 @@
       { t: 'h', text: 'Crossing a page' },
       { t: 'p', html: 'A <em>page</em> is 256 bytes that share the same high byte: <code>$0200</code>-<code>$02FF</code> is page 2. In <code>LDA $02F0,X</code> with X = <code>$20</code>, the address is <code>$0310</code>: adding X carried into the high byte. The 6502 adds the low byte first and fixes the high byte one cycle later, so a read that crosses a page takes <strong>one extra cycle</strong>.' },
       { t: 'p', html: 'Only reads pay it. Stores and read-modify-write instructions always take the longer time, crossing or not, because they cannot risk writing to the wrong address first. In the tables, a <code>+</code> after the cycle count marks the instructions that pay the extra cycle.' },
-      { t: 'code', title: 'cpu.c', lines: [
-        ['static int page_crossed;', 'Set by the indexed modes. <code>cpu_step</code> clears it at the start of every instruction.'],
-        [''],
-        ['static uint16_t addr_abx(Cpu *cpu) {'],
-        ['    uint16_t base = fetch16(cpu);'],
-        ['    uint16_t addr = (uint16_t)(base + cpu->x);'],
-        ['    page_crossed = (base & 0xFF00) != (addr & 0xFF00);', 'Compare the high bytes before and after adding X.'],
+      { t: 'code', title: 'cpu.cpp', lines: [
+        ['std::uint16_t Cpu::addr_abx() {', '<code>page_crossed_</code> is a private member, declared in <code>cpu.h</code>. <code>Cpu::step</code> sets it back to <code>false</code> at the start of every instruction.'],
+        ['    std::uint16_t base = fetch16();'],
+        ['    auto addr = static_cast<std::uint16_t>(base + x);'],
+        ['    page_crossed_ = (base & 0xFF00) != (addr & 0xFF00);', 'Compare the high bytes before and after adding X.'],
         ['    return addr;'],
         ['}'],
         [''],
-        ['case 0xBD: lda(cpu, addr_abx(cpu)); cycles = 4 + page_crossed; break;', 'A read: 4 cycles, 5 if the page changed.'],
-        ['case 0x9D: sta(cpu, addr_abx(cpu)); cycles = 5; break;', 'A store: always 5.'],
+        ['case 0xBD: lda(addr_abx()); cost = 4 + page_crossed_; break;', 'A read: 4 cycles, 5 if the page changed. In arithmetic, <code>true</code> counts as 1 and <code>false</code> as 0.'],
+        ['case 0x9D: sta(addr_abx()); cost = 5; break;', 'A store: always 5.'],
       ] },
 
       { t: 'h', text: 'Pointers in the zero page' },
-      { t: 'p', html: 'The two indirect modes are the 6502\'s version of C pointers (lesson 7). A 16-bit address is stored as two bytes in the zero page, low byte first, and the instruction follows it:' },
+      { t: 'p', html: 'The two indirect modes are the 6502\'s version of the pointers from lesson 7. A 16-bit address is stored as two bytes in the zero page, low byte first, and the instruction follows it:' },
       { t: 'list', items: [
         '<code>LDA ($20),Y</code>, called <em>indirect indexed</em>: read the pointer at <code>$20</code>/<code>$21</code>, then add Y. This is how games walk through a table: the pointer says where the table starts, Y is the index. Like the other indexed reads, it costs one more cycle when adding Y crosses a page.',
         '<code>LDA ($20,X)</code>, called <em>indexed indirect</em>: add X to <code>$20</code> first (wrapping in the zero page), then read the pointer there. Useful for a list of pointers. Rarely used, but tested.',
@@ -107,19 +105,19 @@
         stage: 4,
         title: 'The zero page',
         prompt: `<p>Write the first addressing modes and the load and store operations:</p>
-<pre>static uint16_t addr_imm(Cpu *cpu)   // return cpu->pc++
-static uint16_t addr_zp(Cpu *cpu)    // one byte: the address itself
-static uint16_t addr_zpx(Cpu *cpu)   // (uint8_t)(byte + x)
-static uint16_t addr_zpy(Cpu *cpu)   // (uint8_t)(byte + y)
+<pre>std::uint16_t Cpu::addr_imm()   // return pc++
+std::uint16_t Cpu::addr_zp()    // one byte: the address itself
+std::uint16_t Cpu::addr_zpx()   // that byte + x, kept in the zero page
+std::uint16_t Cpu::addr_zpy()   // that byte + y, kept in the zero page
 
-static void lda(Cpu *cpu, uint16_t addr)  // and ldx, ldy: read, set Z and N
-static void sta(Cpu *cpu, uint16_t addr)  // and stx, sty: write, no flags</pre>
-<p>Replace your three immediate loads with <code>lda(cpu, addr_imm(cpu))</code> and so on, then add these opcodes:</p>
+void Cpu::lda(std::uint16_t addr)  // and ldx, ldy: read, set Z and N
+void Cpu::sta(std::uint16_t addr)  // and stx, sty: write, no flags</pre>
+<p>Replace your three immediate loads with <code>lda(addr_imm())</code> and so on, then add these opcodes:</p>
 ${C.opcodeTable(['LDA', 'LDX', 'LDY', 'STA', 'STX', 'STY'], ['imm', 'zp', 'zpx', 'zpy'])}
 <p>The other modes come in the next exercises.</p>`,
         hints: [
-          'Each mode is one line. <code>addr_zpx</code>: <code>return (uint8_t)(fetch(cpu) + cpu-&gt;x);</code>',
-          'Each opcode is one line too: <code>case 0xB5: lda(cpu, addr_zpx(cpu)); cycles = 4; break;</code> and <code>case 0x96: stx(cpu, addr_zpy(cpu)); cycles = 4; break;</code>',
+          'Each mode is one line. <code>addr_zpx</code>: <code>return static_cast&lt;std::uint8_t&gt;(fetch() + x);</code>',
+          'Each opcode is one line too: <code>case 0xB5: lda(addr_zpx()); cost = 4; break;</code> and <code>case 0x96: stx(addr_zpy()); cost = 4; break;</code>',
         ],
       }),
       C.exercise({
@@ -127,14 +125,13 @@ ${C.opcodeTable(['LDA', 'LDX', 'LDY', 'STA', 'STX', 'STY'], ['imm', 'zp', 'zpx',
         stage: 5,
         title: 'Absolute and indexed',
         prompt: `<p>Add full 16-bit addresses:</p>
-<pre>static int page_crossed;               // set by the indexed modes
-static uint16_t addr_abs(Cpu *cpu)     // fetch16
-static uint16_t addr_abx(Cpu *cpu)     // fetch16 + x, sets page_crossed
-static uint16_t addr_aby(Cpu *cpu)     // fetch16 + y, sets page_crossed</pre>
-<p>Set <code>page_crossed = 0;</code> at the start of <code>cpu_step</code>. Then add every absolute and absolute-indexed load and store from the table in the lesson: reads with a <code>+</code> take <code>4 + page_crossed</code> cycles; <code>STA $nnnn,X</code> and <code>STA $nnnn,Y</code> always take 5.</p>
-<p>Finally, change <code>JMP</code> (<code>4C</code>) to use <code>addr_abs</code>: <code>cpu-&gt;pc = addr_abs(cpu);</code></p>`,
+<pre>std::uint16_t Cpu::addr_abs()   // fetch16
+std::uint16_t Cpu::addr_abx()   // fetch16 + x, sets page_crossed_
+std::uint16_t Cpu::addr_aby()   // fetch16 + y, sets page_crossed_</pre>
+<p>Set <code>page_crossed_ = false;</code> at the start of <code>Cpu::step</code>. Then add every absolute and absolute-indexed load and store from the table in the lesson: reads with a <code>+</code> take <code>4 + page_crossed_</code> cycles; <code>STA $nnnn,X</code> and <code>STA $nnnn,Y</code> always take 5.</p>
+<p>Finally, change <code>JMP</code> (<code>4C</code>) to use <code>addr_abs</code>: <code>pc = addr_abs();</code></p>`,
         hints: [
-          '<code>page_crossed = (base &amp; 0xFF00) != (addr &amp; 0xFF00);</code> compares the high bytes before and after adding the index.',
+          '<code>page_crossed_ = (base &amp; 0xFF00) != (addr &amp; 0xFF00);</code> compares the high bytes before and after adding the index.',
           'There are 12 new opcodes: <code>AD BD B9</code> (LDA), <code>AE BE</code> (LDX), <code>AC BC</code> (LDY), <code>8D 9D 99</code> (STA), <code>8E</code> (STX), <code>8C</code> (STY).',
         ],
       }),
@@ -143,16 +140,16 @@ static uint16_t addr_aby(Cpu *cpu)     // fetch16 + y, sets page_crossed</pre>
         stage: 6,
         title: 'Pointers',
         prompt: `<p>Add the indirect modes:</p>
-<pre>// A pointer stored in the zero page; its high byte comes from (uint8_t)(zp + 1)
-static uint16_t read_zp_pointer(uint8_t zp)
-static uint16_t addr_izx(Cpu *cpu)      // ($nn,X): add x first, then read the pointer
-static uint16_t addr_izy(Cpu *cpu)      // ($nn),Y: read the pointer, then add y; sets page_crossed
-static uint16_t addr_ind_jmp(Cpu *cpu)  // JMP ($nnnn), with the page bug</pre>
-<p>And these opcodes: <code>LDA ($nn,X)</code> <code>A1</code> 6 cycles, <code>LDA ($nn),Y</code> <code>B1</code> 5 + page_crossed, <code>STA ($nn,X)</code> <code>81</code> 6, <code>STA ($nn),Y</code> <code>91</code> 6, and <code>JMP ($nnnn)</code> <code>6C</code> 5.</p>
+<pre>// A pointer stored in the zero page; its high byte comes from zp + 1, kept in the zero page
+std::uint16_t Cpu::read_zp_pointer(std::uint8_t zp)
+std::uint16_t Cpu::addr_izx()      // ($nn,X): add x first, then read the pointer
+std::uint16_t Cpu::addr_izy()      // ($nn),Y: read the pointer, then add y; sets page_crossed_
+std::uint16_t Cpu::addr_ind_jmp()  // JMP ($nnnn), with the page bug</pre>
+<p>And these opcodes: <code>LDA ($nn,X)</code> <code>A1</code> 6 cycles, <code>LDA ($nn),Y</code> <code>B1</code> 5 + page_crossed_, <code>STA ($nn,X)</code> <code>81</code> 6, <code>STA ($nn),Y</code> <code>91</code> 6, and <code>JMP ($nnnn)</code> <code>6C</code> 5.</p>
 <p>For the JMP bug: the high byte is read from <code>(ptr &amp; 0xFF00) | ((ptr + 1) &amp; 0x00FF)</code>.</p>`,
         hints: [
-          '<code>read_zp_pointer</code>: <code>uint16_t lo = bus_read(zp); uint16_t hi = bus_read((uint8_t)(zp + 1)); return (uint16_t)(hi &lt;&lt; 8 | lo);</code>',
-          '<code>addr_izy</code> is like <code>addr_aby</code>, but the base comes from <code>read_zp_pointer(fetch(cpu))</code> instead of <code>fetch16(cpu)</code>.',
+          '<code>read_zp_pointer</code>: <code>std::uint16_t lo = bus_.read(zp); std::uint16_t hi = bus_.read(static_cast&lt;std::uint8_t&gt;(zp + 1)); return static_cast&lt;std::uint16_t&gt;(hi &lt;&lt; 8 | lo);</code>',
+          '<code>addr_izy</code> is like <code>addr_aby</code>, but the base comes from <code>read_zp_pointer(fetch())</code> instead of <code>fetch16()</code>.',
         ],
       }),
       C.exercise({
@@ -163,11 +160,11 @@ static uint16_t addr_ind_jmp(Cpu *cpu)  // JMP ($nnnn), with the page bug</pre>
 <pre>// Fetches the signed offset. If condition is false, returns 2.
 // Otherwise moves pc and returns 3, or 4 if the target is in another page
 // than the address of the next instruction.
-static int branch(Cpu *cpu, int condition)</pre>
-<p>Then each branch is one line: <code>case 0xD0: cycles = branch(cpu, !get_flag(cpu, FLAG_Z)); break;</code> (BNE). The eight opcodes are in the table in the lesson: <code>10 30 50 70 90 B0 D0 F0</code>.</p>`,
+int Cpu::branch(bool condition)</pre>
+<p>Then each branch is one line: <code>case 0xD0: cost = branch(!get_flag(kFlagZ)); break;</code> (BNE). The eight opcodes are in the table in the lesson: <code>10 30 50 70 90 B0 D0 F0</code>.</p>`,
         hints: [
-          'Fetch first, even when the branch is not taken: <code>int8_t offset = (int8_t)fetch(cpu);</code> After the fetch, <code>cpu-&gt;pc</code> is already the address of the next instruction.',
-          '<code>uint16_t target = (uint16_t)(cpu-&gt;pc + offset);</code> Compare <code>cpu-&gt;pc &amp; 0xFF00</code> with <code>target &amp; 0xFF00</code> to choose 3 or 4, then set <code>cpu-&gt;pc = target;</code>',
+          'Fetch first, even when the branch is not taken: <code>auto offset = static_cast&lt;std::int8_t&gt;(fetch());</code> After the fetch, <code>pc</code> is already the address of the next instruction.',
+          '<code>auto target = static_cast&lt;std::uint16_t&gt;(pc + offset);</code> Compare <code>pc &amp; 0xFF00</code> with <code>target &amp; 0xFF00</code> to choose 3 or 4, then set <code>pc = target;</code>',
         ],
       }),
     ],

@@ -34,7 +34,7 @@
   function exercise(opts) {
     const stage = opts.stage;
     const nestest = stage === 12;
-    const main = nestest ? D.files['nestest-main.c'] : stage >= 11 ? D.files['bench-nmi.c'] : D.files['bench.c'];
+    const main = nestest ? D.files['nestest-main.cpp'] : stage >= 11 ? D.files['bench-nmi.cpp'] : D.files['bench.cpp'];
     const before = D.stages[String(Math.min(stage, 12) - 1)] || D.stages['11'];
     const after = nestest ? D.stages['11'] : D.stages[String(stage)];
     const ex = {
@@ -43,22 +43,22 @@
       prompt: opts.prompt,
       project: {
         course: {
-          'main.c': main,
-          'cpu.h': D.files['cpu.h'],
+          'main.cpp': main,
           'bus.h': D.files['bus.h'],
           'trace.h': D.files['trace.h'],
-          'trace.c': D.files['trace.c'],
+          'trace.cpp': D.files['trace.cpp'],
         },
         learner: {
-          'cpu.c': { starter: nestest ? D.stages['11'] : before },
-          'bus.c': { starter: D.busC },
+          'cpu.cpp': { starter: nestest ? D.stages['11'] : before },
+          'cpu.h': { starter: D.files['cpu.h'] },
+          'bus.cpp': { starter: D.busCpp },
         },
-        open: 'cpu.c',
+        open: 'cpu.cpp',
       },
       stdin: opts.stdin != null ? opts.stdin : D.tests[String(stage)][0].stdin,
       tests: D.tests[String(stage)].map((t) => Object.assign({}, t, nestest ? { timeoutMs: 20000 } : {})),
       hints: opts.hints,
-      solution: { 'cpu.c': after },
+      solution: { 'cpu.cpp': after },
     };
     if (nestest) {
       ex.data = { 'nestest.nes': 'nes/nestest.nes', 'nestest.log': 'nes/nestest-official.log' };
