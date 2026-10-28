@@ -16,7 +16,7 @@
     }
     if (/divide by zero|division by zero/i.test(m)) return 'Your program divided an integer by zero.';
     if (/integer overflow/i.test(m)) return 'An integer division overflowed (for example INT_MIN / -1).';
-    if (/unreachable/.test(m)) return 'Your program called abort() or reached code that should never run (a failed assert also does this).';
+    if (/unreachable/.test(m)) return 'Your program stopped itself: it called abort(), a check failed (for example .at() with an index outside the container, or an assert), or it reached code that should never run.';
     if (/call stack|too much recursion|stack overflow/i.test(m)) return 'The call stack overflowed. This usually means a recursive function never stops calling itself.';
     if (/indirect call/.test(m)) return 'Your program called a function through a bad function pointer.';
     return m;

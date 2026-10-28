@@ -48,11 +48,16 @@
   function checkBuild(exercise, files) {
     if (!exercise.harness) return { files, options: {} };
     const fileDefines = {};
+    const fileFlags = {};
     for (const name of Object.keys(files)) {
-      // Files the harness replaces (for example a hidden main.c) keep their main.
-      if (/\.(c|cpp)$/.test(name) && !(name in exercise.harness)) fileDefines[name] = ['main=opcode_learner_main'];
+      // Files the harness replaces (for example a hidden main.cpp) keep their main.
+      if (/\.(c|cpp)$/.test(name) && !(name in exercise.harness)) {
+        fileDefines[name] = ['main=opcode_learner_main'];
+        // Once renamed, a main() without "return 0;" would warn; in main itself that is allowed.
+        if (name.endsWith('.cpp')) fileFlags[name] = ['-Wno-return-type'];
+      }
     }
-    return { files: Object.assign({}, files, exercise.harness), options: { fileDefines } };
+    return { files: Object.assign({}, files, exercise.harness), options: { fileDefines, fileFlags } };
   }
 
   const api = { normalize, compare, checkRules, stripComments, checkBuild };

@@ -145,6 +145,7 @@
           '-I', dir, opt, cxx ? '-std=c++17' : '-std=c11', '-Wall', '-Wno-unused-variable', '-Wno-unused-function',
           ...(options.defines || []).map((d) => `-D${d}`),
           ...((options.fileDefines && options.fileDefines[src]) || []).map((d) => `-D${d}`),
+          ...((options.fileFlags && options.fileFlags[src]) || []),
           '-o', obj, '-x', cxx ? 'c++' : 'c', `${dir}/${src}`,
         ]);
         diagnostics += clean(r.text);

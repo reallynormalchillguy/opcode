@@ -516,9 +516,9 @@
 
   // In an emulator project, a file can include a header this exercise does
   // not list: the learner went back to an older exercise with newer files
-  // (bus.c from lesson 20 includes controller.h). Add what the includes
-  // need: the newest course header, and the learner's .c file of the same
-  // name if the project has one (or the course's, like palette.c).
+  // (bus.cpp from a later lesson includes controller.h). Add what the includes
+  // need: the newest course header, and the learner's .cpp file of the same
+  // name if the project has one (or the course's, like palette.cpp).
   function addProjectDependencies(ex, files) {
     const fallback = (ex.project && ex.project.fallback) || {};
     const mine = Progress.projectFiles();
@@ -527,7 +527,7 @@
       const text = files[queue.shift()] || '';
       for (const m of text.matchAll(/#include\s+"([\w.]+)\.h"/g)) {
         const base = m[1];
-        for (const name of [`${base}.h`, `${base}.c`]) {
+        for (const name of [`${base}.h`, `${base}.cpp`, `${base}.c`]) {
           if (name in files) continue;
           const found = name in mine ? mine[name] : fallback[name];
           if (found == null) continue;
