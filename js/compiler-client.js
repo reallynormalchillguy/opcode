@@ -31,7 +31,7 @@
   function start() {
     if (worker) return ready;
     worker = new Worker(BASE + 'compile-worker.js');
-    setStatus({ state: 'loading', text: 'Downloading the C compiler', fraction: 0 });
+    setStatus({ state: 'loading', text: 'Downloading the C++ compiler', fraction: 0 });
     worker.onmessage = (e) => {
       const m = e.data;
       if (m.type === 'status') {

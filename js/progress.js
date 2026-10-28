@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const KEY = 'opcode.v1';
+  const KEY = 'opcode.cpp.v1';   // the C course used opcode.v1
   // project.files: the learner's own emulator files, shared by every NES exercise.
   let state = { solved: {}, code: {}, stdin: {}, hintsSeen: {}, last: null, project: { files: {} } };
 

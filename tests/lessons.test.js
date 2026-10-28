@@ -16,7 +16,7 @@ require(path.join(root, 'js', 'course.js'));
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 for (const m of html.matchAll(/<script src="(lessons\/[^"]+)"/g)) require(path.join(root, m[1]));
 
-const EXPECT_FAIL = new Set(['broken.c']);
+const EXPECT_FAIL = new Set(['broken.c', 'broken.cpp']);
 let failures = 0;
 const fail = (msg) => { failures++; console.log('FAIL', msg); };
 
@@ -28,7 +28,7 @@ const fail = (msg) => { failures++; console.log('FAIL', msg); };
     console.log(`== ${lesson.id}`);
     for (const b of lesson.blocks.filter((b) => b.t === 'code' && b.run)) {
       const src = b.lines.map((l) => l[0]).join('\n') + '\n';
-      const name = b.title || 'main.c';
+      const name = b.title || 'main.cpp';
       const r = await tc.build({ [name]: src });
       if (b.expect === 'error' || EXPECT_FAIL.has(name)) {
         if (r.ok) fail(`${name} should not compile`);

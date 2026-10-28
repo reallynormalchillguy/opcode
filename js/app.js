@@ -37,7 +37,7 @@
     const pct = s.fraction != null ? Math.round(s.fraction * 100) : null;
     $('#compiler-status-text').textContent =
       s.state === 'loading' ? `${s.text}… ${pct != null ? pct + '%' : ''}` :
-      s.state === 'ready' ? 'C compiler ready' :
+      s.state === 'ready' ? 'C++ compiler ready' :
       s.state === 'failed' ? `The compiler could not load: ${s.text}. Reload the page to try again.` : s.text;
     $('#compiler-meter').style.width = `${pct || 0}%`;
     $('#compiler-status').dataset.state = s.state;
@@ -85,7 +85,7 @@
     const fig = el('figure', { class: 'code' });
     const hasNotes = block.lines.some((l) => l[1]);
     const cap = el('figcaption', { class: 'code-cap' });
-    cap.appendChild(el('span', { class: 'fname' }, H.esc(block.title || 'example.c')));
+    cap.appendChild(el('span', { class: 'fname' }, H.esc(block.title || 'example.cpp')));
     if (hasNotes) cap.appendChild(el('span', { class: 'cap-hint' }, 'Marked lines open an explanation'));
     if (block.run) {
       const btn = el('button', { class: 'btn small', type: 'button' }, 'Run');
@@ -121,7 +121,7 @@
   async function runExample(block, fig, btn) {
     const out = $('.example-out', fig);
     out.hidden = false;
-    const name = block.title || 'example.c';
+    const name = block.title || 'example.cpp';
     const src = block.lines.map((l) => l[0]).join('\n') + '\n';
     btn.disabled = true;
     out.innerHTML = Compiler.status.state === 'ready' ? '<span class="muted">Compiling…</span>' : '<span class="muted">Waiting for the compiler to finish downloading…</span>';
@@ -231,7 +231,7 @@
 
   const editor = CodeMirror($('#editor'), {
     value: '',
-    mode: 'text/x-csrc',
+    mode: 'text/x-c++src',
     lineNumbers: true,
     indentUnit: 4,
     tabSize: 4,
@@ -283,12 +283,12 @@
     current.docs = {};
     current.readOnly = new Set(readOnly);
     for (const [name, text] of Object.entries(files)) {
-      const doc = CodeMirror.Doc(text, 'text/x-csrc');
+      const doc = CodeMirror.Doc(text, 'text/x-c++src');
       doc.on('change', scheduleSave);
       current.docs[name] = doc;
     }
     const names = Object.keys(files);
-    current.activeFile = open && names.includes(open) ? open : names.includes('main.c') ? 'main.c' : names[0];
+    current.activeFile = open && names.includes(open) ? open : names.includes('main.cpp') ? 'main.cpp' : names.includes('main.c') ? 'main.c' : names[0];
     showDoc(current.activeFile);
     renderFileTabs();
   }
@@ -353,7 +353,7 @@
     const ex = current.exercise;
     const box = $('#ex-prompt');
     box.innerHTML = ex.prompt;
-    if (ex.harness && Object.keys(ex.harness).some((n) => n !== 'main.c' && n.endsWith('.c'))) {
+    if (ex.harness && Object.keys(ex.harness).some((n) => !/^main\.(c|cpp)$/.test(n) && /\.(c|cpp)$/.test(n))) {
       box.appendChild(el('p', { class: 'prompt-note' }, 'Check calls your functions directly with its own tests. Your <code>main</code> is just for trying things with Run.'));
     }
     if (current.hintsShown > 0) {
@@ -798,17 +798,19 @@
   });
 
   function linkAdvice(diag) {
-    const missing = [...new Set([...String(diag).matchAll(/undefined symbol: (\w+)/g)].map((m) => m[1]))];
+    // C++ names come out readable: "undefined symbol: Bus::read(unsigned short)".
+    const missing = [...new Set([...String(diag).matchAll(/undefined symbol: ([^\n]+)/g)].map((m) => m[1].trim()))];
     if (missing.length) {
       const names = missing.map((n) => `<code>${H.esc(n)}</code>`).join(', ');
-      let advice = `Every file compiled, but nothing defines ${names}. Write ${missing.length > 1 ? 'them' : 'it'} with exactly that name, and make sure it is not <code>static</code>.`;
+      let advice = `Every file compiled, but nothing defines ${names}. Write ${missing.length > 1 ? 'them' : 'it'} with exactly that name and those parameter types (and the class name, <code>Class::function</code>, for a member function defined outside its class), and make sure it is not <code>static</code>.`;
       // In the emulator project, a missing function is usually one an earlier
       // exercise added: the learner skipped it, so their file is older.
       const ex = current.exercise;
       if (isProject(ex)) {
         const owners = new Set();
         for (const sym of missing) {
-          const def = new RegExp(`^[\\w \\*]*\\b${sym}\\s*\\([^;]*$`, 'm');
+          const name = sym.replace(/\(.*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');   // Bus::read
+          const def = new RegExp(`^[\\w :<>&\\*]*\\b${name}\\s*\\([^;]*$`, 'm');
           for (const [name, spec] of Object.entries(ex.project.learner || {})) {
             const ref = (ex.solution && ex.solution[name]) || spec.starter;
             if (ref && def.test(ref)) owners.add(name);

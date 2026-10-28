@@ -1,9 +1,10 @@
-/* Opcode — tiny C syntax highlighter for lesson code blocks. */
+/* Opcode — tiny C++ syntax highlighter for lesson code blocks. */
 (function () {
   'use strict';
 
-  const KEYWORDS = new Set(('auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while bool true false _Bool').split(' '));
-  const TYPES = /^(u?int(8|16|32|64)_t|size_t|FILE|NULL)$/;
+  const KEYWORDS = new Set(('auto break case char const continue default do double else enum extern float for goto if inline int long register return short signed sizeof static struct switch typedef union unsigned void volatile while bool true false '
+    + 'class public private protected namespace using template typename new delete this nullptr virtual override final explicit constexpr operator friend noexcept static_cast reinterpret_cast const_cast').split(' '));
+  const TYPES = /^(u?int(8|16|32|64)_t|size_t|std|string|vector|array|map|unique_ptr|make_unique|cout|cin|cerr|endl|getline|FILE|NULL)$/;
 
   function esc(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -11,7 +12,7 @@
 
   const TOKEN = /(\/\/.*$)|(\/\*.*?\*\/)|("(?:[^"\\]|\\.)*")|('(?:[^'\\]|\\.)*')|(\b0[xX][0-9a-fA-F]+[uUlL]*\b|\b\d+(?:\.\d+)?[uUlLfF]*\b)|([A-Za-z_]\w*)|(\s+)|(.)/g;
 
-  // Highlights one line of C. Returns HTML.
+  // Highlights one line of C++. Returns HTML.
   function line(src) {
     if (/^\s*#/.test(src)) {
       const m = src.match(/^(\s*#\s*\w+)(.*)$/);

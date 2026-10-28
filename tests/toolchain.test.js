@@ -14,6 +14,8 @@ require(path.join(dir, 'program.js'));
   console.log('load ms', Date.now() - t);
   const cases = [
     { files: { 'main.c': '#include <stdio.h>\nint main(void){ printf("Hello, NES! ñ\\n"); double d=3.14159; printf("%.2f %lld %u\\n", d, (long long)1<<40, 0xFFu); return 0; }\n' } },
+    { files: { 'main.cpp': '#include <iostream>\n#include <vector>\n#include <string>\n#include <memory>\nstruct Cpu { int pc = 0xC000; void step() { pc += 2; } };\nint main() { std::vector<std::string> v{"NES", "C++"}; auto cpu = std::make_unique<Cpu>(); cpu->step(); std::cout << v[0] << " " << v[1] << " " << std::hex << cpu->pc << std::endl; }\n' } },
+    { files: { 'main.cpp': 'class Bus { public: int read(int a); };\nint main() { Bus b; return b.read(1); }\n' } },
     { files: { 'main.c': '#include <stdio.h>\nint main(void){ int a,b; if(scanf("%d %d",&a,&b)!=2) return 3; printf("%d\\n", a+b); return 0; }\n' }, stdin: '20 22\n' },
     { files: { 'main.c': '#include <stdio.h>\nint main(void){ printf("hi\\n") return 0; }\n' } },
     { files: { 'main.c': '#include "add.h"\n#include <stdio.h>\nint main(void){ printf("%d\\n", add(2,3)); }\n', 'add.h': 'int add(int a, int b);\n', 'add.c': '#include "add.h"\nint add(int a,int b){return a+b;}\n' } },

@@ -22,6 +22,17 @@
     '-fno-common',
   ];
 
+  // C++ looks in libc++'s headers first; they wrap the C ones.
+  const CXX_ARGS = ['-internal-isystem', '/include/c++/v1'];
+  const DEFAULT_OPT = '-O2';
+
+  // The standard headers most programs use, compiled once when the compiler
+  // loads (a "precompiled header"). Reading <iostream> and friends takes
+  // most of a C++ build; with this, a build takes a fraction of a second.
+  const PCH_HEADERS = ['iostream', 'iomanip', 'string', 'vector', 'array', 'map', 'memory', 'algorithm', 'utility',
+    'functional', 'cstdint', 'cstdio', 'cstdlib', 'cstring', 'cmath'];
+  const PCH_SOURCE = PCH_HEADERS.map((h) => `#include <${h}>\n`).join('');
+
   class Toolchain {
     // base: URL prefix where the compiler files live.
     // onStatus: (text, fraction|null) => void
@@ -41,14 +52,14 @@
         ['clang.wasm.gz', 0.58],
         ['lld.wasm.gz', 0.37],
       ];
-      const sizes = { 'memfs.wasm': 345442, 'sysroot.tar.gz': 587988, 'clang.wasm.gz': 10519136, 'lld.wasm.gz': 6705467 };
+      const sizes = { 'memfs.wasm': 345442, 'sysroot.tar.gz': 1774321, 'clang.wasm.gz': 10519136, 'lld.wasm.gz': 6705467 };
       let doneWeight = 0;
       const bytes = {};
       for (const [name, weight] of files) {
-        this.onStatus('Downloading the C compiler', doneWeight);
+        this.onStatus('Downloading the C++ compiler', doneWeight);
         bytes[name] = await fetchBytes(this.base + name, (got, total) => {
           const t = total || sizes[name];
-          this.onStatus('Downloading the C compiler', doneWeight + weight * Math.min(1, got / t));
+          this.onStatus('Downloading the C++ compiler', doneWeight + weight * Math.min(1, got / t));
         });
         doneWeight += weight;
       }
@@ -63,7 +74,18 @@
       this.lld = lldMod;
       this.sysroot = bytes['sysroot.tar.gz'];
       await this.freshFileSystem();
+      this.onStatus('Preparing the C++ library', 1);
+      await this.makePch();
       this.onStatus('Compiler ready', null);
+    }
+
+    async makePch() {
+      this.memfs.addFile('opcode-std.h', PCH_SOURCE);
+      const r = await this.tool(this.clang, [
+        'clang', '-cc1', '-emit-pch', ...CXX_ARGS, ...CLANG_ARGS, DEFAULT_OPT, '-std=c++17',
+        '-x', 'c++-header', 'opcode-std.h', '-o', 'opcode-std.pch',
+      ]);
+      this.pch = r.code === 0 ? this.memfs.getFileContents('opcode-std.pch').slice() : null;
     }
 
     // The in-memory file system has a fixed number of file slots and no
@@ -72,6 +94,10 @@
       this.memfs = new MemFS(this.memfsModule, (b) => this.output.push(this.decoder.decode(b, { stream: true })));
       await this.memfs.ready;
       untar(this.sysroot, this.memfs);
+      if (this.pch) {
+        this.memfs.addFile('opcode-std.h', PCH_SOURCE);
+        this.memfs.addFile('opcode-std.pch', this.pch);
+      }
       // Functions the page provides to programs (screen.h).
       this.memfs.addFile('opcode.imports', 'screen_show\nscreen_loop\nscreen_buttons\nscreen_audio\n');
       this.buildsInFs = 0;
@@ -103,21 +129,23 @@
         this.memfs.addFile(`${dir}/${name}`, text);
       }
       const clean = (s) => s.split(`${dir}/`).join('');
-      const sources = Object.keys(files).filter((n) => n.endsWith('.c'));
+      const sources = Object.keys(files).filter((n) => /\.(c|cpp)$/.test(n));
       if (sources.length === 0) {
-        return { ok: false, diagnostics: 'There is no .c file to compile.\n', ms: 0 };
+        return { ok: false, diagnostics: 'There is no .cpp file to compile.\n', ms: 0 };
       }
       let diagnostics = '';
       const objects = [];
-      const opt = options.opt || '-O2';
+      const opt = options.opt || DEFAULT_OPT;
       for (const src of sources) {
-        const obj = `${dir}/${src.replace(/\.c$/, '.o')}`;
+        const cxx = src.endsWith('.cpp');
+        const obj = `${dir}/${src.replace(/\.(c|cpp)$/, '.o')}`;
+        const pch = cxx && this.pch && opt === DEFAULT_OPT ? ['-include-pch', 'opcode-std.pch'] : [];
         const r = await this.tool(this.clang, [
-          'clang', '-cc1', '-emit-obj', ...CLANG_ARGS,
-          '-I', dir, opt, '-std=c11', '-Wall', '-Wno-unused-variable', '-Wno-unused-function',
+          'clang', '-cc1', '-emit-obj', ...(cxx ? CXX_ARGS : []), ...CLANG_ARGS, ...pch,
+          '-I', dir, opt, cxx ? '-std=c++17' : '-std=c11', '-Wall', '-Wno-unused-variable', '-Wno-unused-function',
           ...(options.defines || []).map((d) => `-D${d}`),
           ...((options.fileDefines && options.fileDefines[src]) || []).map((d) => `-D${d}`),
-          '-o', obj, '-x', 'c', `${dir}/${src}`,
+          '-o', obj, '-x', cxx ? 'c++' : 'c', `${dir}/${src}`,
         ]);
         diagnostics += clean(r.text);
         if (r.code !== 0) return { ok: false, diagnostics, ms: Date.now() - t0 };
@@ -129,7 +157,7 @@
         'wasm-ld', '--no-threads',
         '-z', `stack-size=${options.stackSize || 1048576}`,
         `-L${libdir}`, `${libdir}/crt1.o`, ...objects,
-        '-lc', '/lib/clang/8.0.1/lib/wasi/libclang_rt.builtins-wasm32.a',
+        '-lc++', '-lc++abi', '-lc', '/lib/clang/8.0.1/lib/wasi/libclang_rt.builtins-wasm32.a',
         '--allow-undefined-file=opcode.imports',
         '--export-table',
         '-o', wasm,

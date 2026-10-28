@@ -1,9 +1,23 @@
 # Opcode
 
-An interactive course that teaches C from zero and then guides you through
-writing a NES emulator. A real C compiler (Clang 8 + LLD, compiled to
-WebAssembly) runs inside the browser, so every example and exercise compiles
-and runs locally, with no server.
+An interactive course that teaches C++ from zero and then guides you through
+writing a NES emulator. A real C++ compiler (Clang 8 + LLD with libc++,
+compiled to WebAssembly) runs inside the browser, so every example and
+exercise compiles and runs locally, with no server.
+
+The course is being rewritten from C to C++ on the `cpp` branch: the C++
+fundamentals first, then the emulator, lesson by lesson. Lessons not yet
+rewritten show as "Soon". `main` keeps the finished C course until then.
+
+## The C++ compiler
+
+`compiler/sysroot.tar.gz` holds the C headers and libraries of wasi-libc and,
+for C++, libc++ and libc++abi (from binji/wasm-clang's sysroot). `.cpp` files
+are compiled as C++17 without exceptions (`try`/`catch` is not available).
+When the compiler loads, it precompiles the most used standard headers
+(`<iostream>`, `<string>`, `<vector>`…; see `PCH_HEADERS` in
+`compiler/toolchain.js`), which makes a C++ build take a fraction of a second
+instead of about one.
 
 ## Run it locally
 
@@ -37,7 +51,7 @@ that it comes from the browser cache.
 | `js/compiler-client.js` | Talks to the compile and run workers |
 | `js/highlight.js`, `js/console.js` | Code colouring and console output |
 | `lessons/*.js` | One file per lesson: text, annotated code, quizzes, exercises |
-| `compiler/` | Clang, LLD, the C headers/libraries and the WASI runtime |
+| `compiler/` | Clang, LLD, the C and C++ headers/libraries (libc++) and the WASI runtime |
 | `vendor/` | CodeMirror 5 and the fonts (Archivo, IBM Plex Mono) |
 | `tests/` | Node checks for the compiler and every lesson |
 

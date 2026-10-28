@@ -12,7 +12,7 @@
   function explainTrap(message) {
     const m = String(message);
     if (/out of bounds/.test(m)) {
-      return 'Your program read or wrote memory it does not own (in C this is usually a bad pointer or an array index out of range). On a normal PC this is called a segmentation fault.';
+      return 'Your program read or wrote memory it does not own (in C++ this is usually a bad pointer or an array index out of range). On a normal PC this is called a segmentation fault.';
     }
     if (/divide by zero|division by zero/i.test(m)) return 'Your program divided an integer by zero.';
     if (/integer overflow/i.test(m)) return 'An integer division overflowed (for example INT_MIN / -1).';

@@ -50,7 +50,7 @@
     const fileDefines = {};
     for (const name of Object.keys(files)) {
       // Files the harness replaces (for example a hidden main.c) keep their main.
-      if (name.endsWith('.c') && !(name in exercise.harness)) fileDefines[name] = ['main=opcode_learner_main'];
+      if (/\.(c|cpp)$/.test(name) && !(name in exercise.harness)) fileDefines[name] = ['main=opcode_learner_main'];
     }
     return { files: Object.assign({}, files, exercise.harness), options: { fileDefines } };
   }
