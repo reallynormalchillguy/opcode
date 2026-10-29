@@ -28,8 +28,10 @@
   // Returns { exitCode, trap?: string, stdout, stderr, truncated, app?, loopIndex? }
   // files: { 'name.nes': Uint8Array } placed next to the program, so it can fopen them.
   // screen: { show(rgba: Uint8ClampedArray), buttons() } for programs that use screen.h.
-  //   If the program calls screen_loop(f), the result has `loopIndex`, and
+  //   If the program calls screen_loop(f) (which never returns), the result has `loopIndex`, and
   //   `callLoop(result)` runs one frame.
+  const LOOP_STARTED = { loopStarted: true };
+
   async function runProgram({ memfsModule, wasm, stdin = '', onOutput, maxOutput = 200000, argv = ['program'], env = {}, files = {}, screen = {} }) {
     let loopIndex = null;
     let app;
@@ -48,7 +50,10 @@
         }
         screen.show(rgba);
       },
-      screen_loop(index) { loopIndex = index; },
+      // screen_loop never returns: it leaves _start right here, so main's
+      // locals and C++ global objects stay alive (their destructors would
+      // otherwise run when main returns) for the frames that follow.
+      screen_loop(index) { loopIndex = index; throw LOOP_STARTED; },
       screen_buttons() { return screen.buttons ? screen.buttons() & 0xFF : 0; },
       screen_audio(ptr, count) {
         if (!screen.audio || count <= 0) return;
@@ -87,6 +92,7 @@
       const exitCode = await app.run();
       return { exitCode, stdout, stderr, truncated, app, loopIndex };
     } catch (e) {
+      if (e === LOOP_STARTED) return { exitCode: 0, stdout, stderr, truncated, app, loopIndex };
       if (truncated) return { exitCode: null, stdout, stderr, truncated };
       return { exitCode: null, trap: explainTrap(e && e.message), rawTrap: String(e && e.message), stdout, stderr, truncated };
     }

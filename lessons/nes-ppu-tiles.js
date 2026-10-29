@@ -3,7 +3,7 @@
 
   // The 64 NES colours as a grid of swatches.
   function paletteFigure() {
-    const src = N.data.headers['palette.c'];
+    const src = N.data.headers['palette.cpp'];
     const values = [...src.matchAll(/0x([0-9A-F]{6})/g)].map((m) => m[1]);
     let html = '<div class="swatches">';
     values.forEach((rgb, i) => {
@@ -32,7 +32,7 @@
         ['<code>$3F00</code>-<code>$3F1F</code>', 'Palette RAM: 32 colour numbers', 'Inside the PPU'],
         ['<code>$3F20</code>-<code>$3FFF</code>', 'Mirrors of the palette RAM, every 32 bytes', ''],
       ] },
-      { t: 'p', html: 'Your <code>ppu_read</code> and <code>ppu_write</code> are this table in code, just as <code>bus_read</code> is the CPU\'s memory map.' },
+      { t: 'p', html: 'Your <code>Ppu::read</code> and <code>Ppu::write</code> are this table in code, just as <code>Bus::read</code> is the CPU\'s memory map.' },
 
       { t: 'h', text: 'Four nametables in 2 KB' },
       { t: 'p', html: 'There is room for four nametables at <code>$2000</code>, <code>$2400</code>, <code>$2800</code> and <code>$2C00</code>, arranged as a 2 × 2 square, but only 2 KB of RAM: enough for two. Each pair of slots shows the same 1 KB. Which pairs share is decided by how the cartridge is wired, and the iNES header tells you:' },
@@ -52,7 +52,7 @@
       { t: 'p', html: 'The tile has no colours, only numbers. The same tile can be drawn in different colours by pairing it with a different palette, which is how so much fits in so little memory.' },
 
       { t: 'h', text: 'From numbers to colours' },
-      { t: 'p', html: 'The NES can show 64 colours, numbered <code>$00</code>-<code>$3F</code>. (A few are duplicates, and <code>$0D</code> is a "blacker than black" that confused some TVs.) The PPU turns them into a TV signal, so there is no single correct RGB value for each; emulators use tables like this one, which is in <code>palette.c</code>:' },
+      { t: 'p', html: 'The NES can show 64 colours, numbered <code>$00</code>-<code>$3F</code>. (A few are duplicates, and <code>$0D</code> is a "blacker than black" that confused some TVs.) The PPU turns them into a TV signal, so there is no single correct RGB value for each; emulators use tables like this one, which is <code>kNesPalette</code> in <code>palette.cpp</code>:' },
       { t: 'figure', html: paletteFigure(), caption: 'The 64 colours of the palette used in this course, with their numbers.' },
       { t: 'p', html: 'Palette RAM holds which of those 64 colours each palette uses. It is 32 bytes: eight palettes of four entries.' },
       { t: 'table', head: ['Addresses', 'Use'], rows: [
@@ -88,18 +88,20 @@
         stage: 16,
         title: 'The PPU\'s memory',
         stdin: 'w 2000 11\nw 2400 22\nr 2800\nr 2C00\nw 3F10 0F\nr 3F00\nr 0000',
-        prompt: `<p>Start <code>ppu.c</code>. Keep 2 KB of video RAM and 32 bytes of palette RAM in private arrays, and write:</p>
-<pre>void ppu_reset(void)                          // clear both arrays
-uint8_t ppu_read(uint16_t addr)
-void ppu_write(uint16_t addr, uint8_t value)</pre>
-<p>Both access functions first keep 14 bits (<code>addr &amp;= 0x3FFF</code>), then:</p>
-<ul><li><code>0000</code>-<code>1FFF</code>: the cartridge, <code>cart_ppu_read</code> and <code>cart_ppu_write</code>.</li>
-<li><code>2000</code>-<code>3EFF</code>: video RAM, using the cartridge's <code>cart_mirroring()</code> as in the lesson.</li>
-<li><code>3F00</code>-<code>3FFF</code>: palette RAM, index <code>addr &amp; 0x1F</code>, where 10, 14, 18 and 1C are the same bytes as 00, 04, 08 and 0C.</li></ul>
+        prompt: `<p>Start <code>ppu.cpp</code>. <code>ppu.h</code> declares the <code>Ppu</code> class: it is built with a reference to the cartridge (<code>Ppu ppu(cart);</code>), keeps it in <code>cart_</code>, and already lists the private members for this lesson and the next, so do not be alarmed by its length. Write:</p>
+<pre>void Ppu::reset()                                       // clear vram_ and palette_ram_
+std::uint8_t Ppu::read(std::uint16_t addr)
+void Ppu::write(std::uint16_t addr, std::uint8_t value)
+std::uint16_t Ppu::nametable_index(std::uint16_t addr) const
+int Ppu::palette_index(std::uint16_t addr) const</pre>
+<p><code>read</code> and <code>write</code> first keep 14 bits (<code>addr &amp;= 0x3FFF</code>), then:</p>
+<ul><li><code>0000</code>-<code>1FFF</code>: the cartridge, <code>cart_.ppu_read</code> and <code>cart_.ppu_write</code>.</li>
+<li><code>2000</code>-<code>3EFF</code>: video RAM, at <code>vram_[nametable_index(addr)]</code>, which uses <code>cart_.mirroring()</code> as in the lesson.</li>
+<li><code>3F00</code>-<code>3FFF</code>: palette RAM, at <code>palette_ram_[palette_index(addr)]</code>: index <code>addr &amp; 0x1F</code>, where 10, 14, 18 and 1C are the same bytes as 00, 04, 08 and 0C.</li></ul>
 <p>Run opens a monitor with the cartridge from the menu plugged in: <code>r ADDR</code> and <code>w ADDR VALUE</code>.</p>`,
-        names: ['Vertical mirroring', 'Horizontal mirroring', 'Palette RAM and its mirrors', 'Pattern tables are the cartridge', 'ppu_reset clears the memory'],
+        names: ['Vertical mirroring', 'Horizontal mirroring', 'Palette RAM and its mirrors', 'Pattern tables are the cartridge', 'reset clears the memory'],
         hints: [
-          'Nametables: <code>uint16_t offset = (addr - 0x2000) &amp; 0x0FFF; int table = offset / 0x400;</code> Vertical: physical table <code>table &amp; 1</code>. Horizontal: <code>table &gt;&gt; 1</code>. The index is <code>physical * 0x400 + (offset &amp; 0x3FF)</code>.',
+          'Nametables: <code>int offset = (addr - 0x2000) &amp; 0x0FFF; int table = offset / 0x400;</code> Vertical: physical table <code>table &amp; 1</code>. Horizontal: <code>table &gt;&gt; 1</code>. The index is <code>physical * 0x400 + (offset &amp; 0x3FF)</code>.',
           'Palette: <code>int i = addr &amp; 0x1F; if ((i &amp; 0x13) == 0x10) i &amp;= 0x0F;</code> The mask <code>0x13</code> keeps bit 4 and the two lowest bits: it equals <code>0x10</code> exactly for 10, 14, 18 and 1C.',
         ],
       }),
@@ -108,16 +110,16 @@ void ppu_write(uint16_t addr, uint8_t value)</pre>
         stage: 17,
         title: 'Decode tiles',
         stdin: '41',
-        prompt: `<p>Add to <code>ppu.c</code>:</p>
+        prompt: `<p>Write the member function that decodes one row of a tile:</p>
 <pre>// One row (0-7) of a tile in the pattern table at table
 // (0x0000 or 0x1000), as eight colour numbers 0-3, left to right.
-void ppu_tile_row(uint16_t table, uint8_t tile, int row, uint8_t out[8])</pre>
-<p>Read both planes with your <code>ppu_read</code>: the low plane at <code>table + tile * 16 + row</code>, the high plane 8 bytes later.</p>
+std::array&lt;std::uint8_t, 8&gt; Ppu::tile_row(std::uint16_t table, std::uint8_t tile, int row)</pre>
+<p>Read both planes with your <code>read</code>: the low plane at <code>table + tile * 16 + row</code>, the high plane 8 bytes later. It returns the eight numbers in a <code>std::array</code>: returning a small array by value is cheap, and clearer than filling one the caller passes in.</p>
 <p>Then press Run: it draws <strong>every tile</strong> of the cartridge on the screen, in greys. With <code>nestest.nes</code> you will see its font. Try a game of yours too.</p>`,
         names: ['A tile with all four colours', 'A tile in the second pattern table', 'Tiles from nestest'],
         hints: [
           'For pixel <code>x</code> (0 = left), the bit is <code>7 - x</code>: <code>(lo &gt;&gt; (7 - x)) &amp; 1</code>.',
-          '<code>out[x] = (uint8_t)(((lo &gt;&gt; bit) &amp; 1) | (((hi &gt;&gt; bit) &amp; 1) &lt;&lt; 1));</code>',
+          '<code>std::array&lt;std::uint8_t, 8&gt; out{};</code> then in a loop <code>out[x] = static_cast&lt;std::uint8_t&gt;(((lo &gt;&gt; bit) &amp; 1) | (((hi &gt;&gt; bit) &amp; 1) &lt;&lt; 1));</code> and finally <code>return out;</code>',
         ],
       }),
       N.exercise({
@@ -125,19 +127,19 @@ void ppu_tile_row(uint16_t table, uint8_t tile, int row, uint8_t out[8])</pre>
         stage: 18,
         title: 'PPUADDR and PPUDATA',
         stdin: 'w 6 3F\nw 6 00\nw 7 0F\nw 6 20\nw 6 00\nw 7 48\nw 7 49\nr 2\nw 6 20\nw 6 00\nr 7\nr 7\nr 7\np 3F00',
-        prompt: `<p>Give the CPU its door into the PPU. Add the private registers <code>ctrl</code>, <code>status</code>, <code>vram_addr</code> (16 bits), <code>write_latch</code> and <code>read_buffer</code>, clear them in <code>ppu_reset</code>, and write:</p>
-<pre>uint8_t ppu_register_read(int reg)            // reg 0-7 is 2000-2007
-void ppu_register_write(int reg, uint8_t value)</pre>
+        prompt: `<p>Give the CPU its door into the PPU. Clear the registers <code>ctrl_</code>, <code>status_</code>, <code>vram_addr_</code>, <code>write_latch_</code> and <code>read_buffer_</code> in <code>reset</code>, and write:</p>
+<pre>std::uint8_t Ppu::register_read(int reg)                 // reg 0-7 is 2000-2007
+void Ppu::register_write(int reg, std::uint8_t value)</pre>
 <table><tr><th>Register</th><th>Write</th><th>Read</th></tr>
-<tr><td>0 PPUCTRL</td><td>store in <code>ctrl</code></td><td></td></tr>
-<tr><td>2 PPUSTATUS</td><td></td><td>return <code>(status &amp; 0xE0) | (read_buffer &amp; 0x1F)</code> and set <code>write_latch</code> to 0</td></tr>
-<tr><td>6 PPUADDR</td><td>first write: high 6 bits of <code>vram_addr</code>; second: low byte; flip the latch each time</td><td></td></tr>
-<tr><td>7 PPUDATA</td><td><code>ppu_write(vram_addr, value)</code>, then add the increment</td><td>palette (3F00 and up): the byte itself, and refill the buffer from <code>addr - 0x1000</code>; otherwise return the buffer and refill it from <code>vram_addr</code>; then add the increment</td></tr></table>
-<p>The increment is 32 if bit 2 of <code>ctrl</code> is set, otherwise 1, and <code>vram_addr</code> always stays below 4000. Other registers come in the next lesson; reads of them return 0.</p>`,
+<tr><td>0 PPUCTRL</td><td>store in <code>ctrl_</code></td><td></td></tr>
+<tr><td>2 PPUSTATUS</td><td></td><td>return <code>(status_ &amp; 0xE0) | (read_buffer_ &amp; 0x1F)</code> and set <code>write_latch_</code> to false</td></tr>
+<tr><td>6 PPUADDR</td><td>first write: high 6 bits of <code>vram_addr_</code>; second: low byte; flip the latch each time</td><td></td></tr>
+<tr><td>7 PPUDATA</td><td><code>write(vram_addr_, value)</code>, then add the increment</td><td>palette (3F00 and up): the byte itself, and refill the buffer from <code>addr - 0x1000</code>; otherwise return the buffer and refill it from <code>vram_addr_</code>; then add the increment</td></tr></table>
+<p>The increment is 32 if bit 2 of <code>ctrl_</code> is set, otherwise 1, and <code>vram_addr_</code> always stays below 4000. Other registers come in the next lesson; reads of them return 0.</p>`,
         names: ['PPUADDR then PPUDATA writes', 'Reads come one late', 'PPUCTRL bit 2 adds 32', 'The palette answers at once', 'Reading PPUSTATUS resets the latch', 'Addresses stay below 4000'],
         hints: [
-          'First PPUADDR write: <code>vram_addr = (uint16_t)(((value &amp; 0x3F) &lt;&lt; 8) | (vram_addr &amp; 0x00FF));</code> second: <code>vram_addr = (uint16_t)((vram_addr &amp; 0xFF00) | value);</code> and <code>write_latch ^= 1;</code> after either.',
-          'After each PPUDATA access: <code>vram_addr = (uint16_t)((vram_addr + ((ctrl &amp; 0x04) ? 32 : 1)) &amp; 0x3FFF);</code>',
+          'First PPUADDR write: <code>vram_addr_ = static_cast&lt;std::uint16_t&gt;(((value &amp; 0x3F) &lt;&lt; 8) | (vram_addr_ &amp; 0x00FF));</code> second: <code>vram_addr_ = static_cast&lt;std::uint16_t&gt;((vram_addr_ &amp; 0xFF00) | value);</code> and <code>write_latch_ = !write_latch_;</code> after either.',
+          'After each PPUDATA access: <code>vram_addr_ = static_cast&lt;std::uint16_t&gt;((vram_addr_ + ((ctrl_ &amp; 0x04) ? 32 : 1)) &amp; 0x3FFF);</code> A <code>switch (reg)</code> with one <code>case</code> per register keeps both functions readable.',
         ],
       }),
     ],

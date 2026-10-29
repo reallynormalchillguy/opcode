@@ -1,53 +1,77 @@
-#ifndef PPU_H
-#define PPU_H
+#pragma once
+#include <array>
+#include <cstdint>
+#include <vector>
+#include "cart.h"
 
-#include <stdint.h>
+constexpr int kPpuWidth = 256;
+constexpr int kPpuHeight = 240;
 
-#define PPU_WIDTH 256
-#define PPU_HEIGHT 240
+// The picture chip. It reads tiles from the cartridge it is given.
+class Ppu {
+public:
+    explicit Ppu(Cartridge& cart) : cart_(cart) {}
 
-// Power on: clear the PPU's memory and registers.
-void ppu_reset(void);
+    // Power on: clear the PPU's memory and registers.
+    void reset();
 
-// The PPU's own bus, 0000-3FFF:
-//   0000-1FFF pattern tables (the cartridge's CHR)
-//   2000-2FFF four nametables (2 KB of video RAM, mirrored), repeated up to 3EFF
-//   3F00-3F1F palette RAM, repeated up to 3FFF
-uint8_t ppu_read(uint16_t addr);
-void ppu_write(uint16_t addr, uint8_t value);
+    // The PPU's own bus, 0000-3FFF:
+    //   0000-1FFF pattern tables (the cartridge's CHR)
+    //   2000-2FFF four nametables (2 KB of video RAM, mirrored), repeated up to 3EFF
+    //   3F00-3F1F palette RAM, repeated up to 3FFF
+    std::uint8_t read(std::uint16_t addr);
+    void write(std::uint16_t addr, std::uint8_t value);
 
-// Row `row` (0-7) of tile `tile` in the pattern table at `table` (0x0000 or
-// 0x1000), as eight colour numbers 0-3, left to right.
-void ppu_tile_row(uint16_t table, uint8_t tile, int row, uint8_t out[8]);
-//@ 23
+    // Row `row` (0-7) of tile `tile` in the pattern table at `table` (0x0000
+    // or 0x1000), as eight colour numbers 0-3, left to right.
+    std::array<std::uint8_t, 8> tile_row(std::uint16_t table, std::uint8_t tile, int row);
 
-// The sprites on scanline y: the numbers (0-63) of the first eight go into
-// found, in OAM order. Returns how many there are in all, which can be more
-// than 8.
-int ppu_sprites_on_line(int y, uint8_t found[8]);
-//@ end
+    // The eight registers the CPU sees at 2000-2007. reg is 0 to 7.
+    std::uint8_t register_read(int reg);
+    void register_write(int reg, std::uint8_t value);
 
-// The eight registers the CPU sees at 2000-2007. reg is 0 to 7.
-uint8_t ppu_register_read(int reg);
-void ppu_register_write(int reg, uint8_t value);
-//@ 28
+    // Advance the PPU by one dot.
+    void tick();
 
-// The scroll registers: v, t, fine x and the write toggle w.
-void ppu_scroll_regs(uint16_t *v, uint16_t *t, uint8_t *fine_x, int *w);
-//@ end
+    // Each returns true once, the first time it is asked after the event happened.
+    bool take_nmi();    // the PPU wants to interrupt the CPU
+    bool take_frame();  // a frame has been finished
 
-// Advance the PPU by one dot.
-void ppu_tick(void);
+    // Where the PPU is in the frame: scanline 0-261, dot 0-340.
+    int scanline() const { return scanline_; }
+    int dot() const { return dot_; }
 
-// Each returns 1 once, the first time it is asked after the event happened.
-int ppu_take_nmi(void);    // the PPU wants to interrupt the CPU
-int ppu_take_frame(void);  // a frame has been finished
+    // The finished picture: 256 x 240 pixels, each 0x00RRGGBB.
+    const std::uint32_t* pixels() const { return pixels_.data(); }
 
-// Where the PPU is in the frame: scanline 0-261, dot 0-340.
-int ppu_scanline(void);
-int ppu_dot(void);
+private:
+    Cartridge& cart_;
 
-// The finished picture: 256 x 240 pixels, each 0x00RRGGBB.
-const uint32_t *ppu_pixels(void);
+    // Memory
+    std::array<std::uint8_t, 0x800> vram_{};      // 2 KB: two physical nametables
+    std::array<std::uint8_t, 32> palette_ram_{};
+    std::uint16_t nametable_index(std::uint16_t addr) const;   // which byte of vram_ for 2000-3EFF
+    int palette_index(std::uint16_t addr) const;               // which byte of palette_ram_ for 3F00-3FFF
 
-#endif
+    // Registers
+    std::uint8_t ctrl_ = 0;                        // 2000 PPUCTRL
+    std::uint8_t mask_ = 0;                        // 2001 PPUMASK
+    std::uint8_t status_ = 0;                      // 2002 PPUSTATUS
+    std::uint8_t oam_addr_ = 0;                    // 2003 OAMADDR
+    std::array<std::uint8_t, 256> oam_{};          // sprite memory, used in a later lesson
+    std::uint8_t scroll_x_ = 0;                    // 2005 PPUSCROLL, first write
+    std::uint8_t scroll_y_ = 0;                    // 2005 PPUSCROLL, second write
+    std::uint16_t vram_addr_ = 0;                  // 2006 PPUADDR: where 2007 reads and writes
+    bool write_latch_ = false;                     // false: the next 2005/2006 write is the first one
+    std::uint8_t read_buffer_ = 0;                 // 2007 reads are delayed by one
+
+    // Timing
+    int scanline_ = 0;                             // 0-261
+    int dot_ = 0;                                  // 0-340
+    bool nmi_pending_ = false;
+    bool frame_ready_ = false;
+
+    // The picture
+    std::vector<std::uint32_t> pixels_ = std::vector<std::uint32_t>(kPpuWidth * kPpuHeight);
+    void render_scanline(int y);                   // draw row y of pixels_
+};

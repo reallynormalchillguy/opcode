@@ -1,53 +1,55 @@
-#ifndef CART_H
-#define CART_H
-
-#include <stdint.h>
+#pragma once
+#include <array>
+#include <cstdint>
+#include <vector>
 
 // How the PPU's 2 KB of nametable memory appears in its four nametable slots.
-typedef enum {
-    MIRROR_HORIZONTAL = 0,  // 2000 = 2400 and 2800 = 2C00 (for games that scroll up and down)
-    MIRROR_VERTICAL = 1,    // 2000 = 2800 and 2400 = 2C00 (for games that scroll sideways)
-//@ 31
-    MIRROR_ONE_LOW = 2,     // all four are the first 1 KB (one-screen, set by some mappers)
-    MIRROR_ONE_HIGH = 3,    // all four are the second 1 KB
-//@ end
-} Mirroring;
+enum class Mirroring {
+    Horizontal,  // 2000 = 2400 and 2800 = 2C00 (for games that scroll up and down)
+    Vertical,    // 2000 = 2800 and 2400 = 2C00 (for games that scroll sideways)
+};
 
-// What cart_load returns.
-#define CART_OK 0
-#define CART_NOT_INES -1            // the file does not start with "NES" and 1A
-#define CART_TOO_SHORT -2           // the file is shorter than its header says
-#define CART_UNSUPPORTED_MAPPER -3  // a mapper this emulator does not have yet
-#define CART_NO_MEMORY -4           // malloc failed
+// What Cartridge::load returns.
+enum class LoadResult {
+    Ok,
+    NotInes,            // the file does not start with "NES" and 1A
+    TooShort,           // the file is shorter than its header says
+    UnsupportedMapper,  // a mapper this emulator does not have yet
+};
 
-// Read an iNES file that is already in memory. Returns one of the codes above.
-int cart_load(const uint8_t *data, long size);
+// A game cartridge: its ROM chips, its RAM, and how they are wired.
+class Cartridge {
+public:
+    // Read an iNES file that is already in memory. On success, the new
+    // cartridge replaces any earlier one; on failure, nothing changes.
+    LoadResult load(const std::vector<std::uint8_t>& file);
 
-// What the header said.
-int cart_mapper(void);
-int cart_prg_banks(void);   // in 16 KB units
-int cart_chr_banks(void);   // in 8 KB units; 0 means 8 KB of CHR RAM instead
-//@ 13-30
-Mirroring cart_mirroring(void);
-//@ end
-//@ 31
-Mirroring cart_mirroring(void);   // now: mappers can change it while the game runs
-//@ end
-int cart_has_battery(void);
+    // What the header said.
+    int mapper() const { return mapper_; }
+    int prg_banks() const { return prg_banks_; }   // in 16 KB units
+    int chr_banks() const { return chr_banks_; }   // in 8 KB units; 0 means 8 KB of CHR RAM instead
+    Mirroring mirroring() const { return mirroring_; }
+    bool has_battery() const { return battery_; }
 
-// The cartridge as the CPU sees it: 4020-FFFF.
-uint8_t cart_cpu_read(uint16_t addr);
-void cart_cpu_write(uint16_t addr, uint8_t value);
+    // The cartridge as the CPU sees it: 4020-FFFF.
+    std::uint8_t cpu_read(std::uint16_t addr);
+    void cpu_write(std::uint16_t addr, std::uint8_t value);
 
-// The cartridge as the PPU sees it: pattern tables at 0000-1FFF.
-uint8_t cart_ppu_read(uint16_t addr);
-void cart_ppu_write(uint16_t addr, uint8_t value);
-//@ 33
+    // The cartridge as the PPU sees it: pattern tables at 0000-1FFF.
+    std::uint8_t ppu_read(std::uint16_t addr);
+    void ppu_write(std::uint16_t addr, std::uint8_t value);
 
-// MMC3's scanline counter: the PPU calls cart_scanline once per scanline
-// while it draws, and cart_irq is 1 while the cartridge wants an IRQ.
-void cart_scanline(void);
-int cart_irq(void);
-//@ end
+private:
+    // What the header says.
+    int mapper_ = 0;
+    int prg_banks_ = 0;
+    int chr_banks_ = 0;
+    Mirroring mirroring_ = Mirroring::Horizontal;
+    bool battery_ = false;
 
-#endif
+    // The cartridge's memory.
+    std::vector<std::uint8_t> prg_;                // program ROM: prg_banks * 16 KB
+    std::vector<std::uint8_t> chr_;                // pattern tables: CHR ROM, or 8 KB of CHR RAM
+    bool chr_is_ram_ = false;
+    std::array<std::uint8_t, 0x2000> prg_ram_{};   // 6000-7FFF
+};

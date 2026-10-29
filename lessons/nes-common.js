@@ -1,4 +1,4 @@
-/* Opcode — helpers shared by the cartridge and PPU lessons (16 onwards). */
+/* Opcode — helpers shared by the cartridge and PPU lessons (17 onwards). */
 (function () {
   'use strict';
 
@@ -8,7 +8,7 @@
   // names: one name per test, in order.
   function exercise(opts) {
     const S = D.stages[String(opts.stage)];
-    const course = { 'main.c': S.main };
+    const course = { 'main.cpp': S.main };
     // Headers that changed over the course have versions: 'bus.h@22' is the
     // bus.h of stage 22 onwards.
     for (const key of S.course) course[key.split('@')[0]] = D.headers[key];
@@ -20,7 +20,7 @@
     const newest = {};
     for (const key of Object.keys(D.headers)) {
       const [name, from] = key.split('@');
-      if (name === 'trace.c') continue;
+      if (name === 'trace.cpp') continue;
       if (!(name in newest) || Number(from || 0) > newest[name]) {
         newest[name] = Number(from || 0);
         fallback[name] = D.headers[key];
@@ -37,7 +37,7 @@
       solution: S.solution,
     };
     if (opts.names.length !== S.tests.length) throw new Error(`${opts.id}: ${S.tests.length} tests but ${opts.names.length} names`);
-    if (S.harness) ex.harness = { 'main.c': S.harness };
+    if (S.harness) ex.harness = { 'main.cpp': S.harness };
     if (S.data.length) {
       ex.data = {};
       for (const name of S.data) ex.data[name] = `nes/${name}`;
