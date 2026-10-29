@@ -16,6 +16,11 @@ std::uint8_t Bus::read(std::uint16_t addr) {
         return ppu_.register_read(addr & 7);
     }
 //@ end
+//@ 35
+    if (addr == 0x4015) {                           // the sound chip's status
+        return apu_.read_status();
+    }
+//@ end
 //@ 26
     if (addr == 0x4016 || addr == 0x4017) {         // the controllers
         // Only bit 0 comes from the controller. The others keep what was last
@@ -47,6 +52,12 @@ void Bus::write(std::uint16_t addr, std::uint8_t value) {
 //@ 26
     } else if (addr == 0x4016) {                    // the strobe of both controllers
         controllers_.write(value);
+//@ end
+//@ 35
+    } else if (addr <= 0x4013 && addr >= 0x4000) {  // the sound chip's channels
+        apu_.write(addr, value);
+    } else if (addr == 0x4015 || addr == 0x4017) {  // its switches and its frame counter
+        apu_.write(addr, value);
 //@ end
     } else if (addr >= 0x4020) {
         cart_.cpu_write(addr, value);

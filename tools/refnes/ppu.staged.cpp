@@ -56,6 +56,22 @@ std::uint16_t Ppu::nametable_index(std::uint16_t addr) const {
         physical = table >> 1;                      // 0 0 / 1 1
     }
 //@ end
+//@ 31
+    switch (cart_.mirroring()) {
+    case Mirroring::Vertical:
+        physical = table & 1;                       // 0 1 / 0 1
+        break;
+    case Mirroring::Horizontal:
+        physical = table >> 1;                      // 0 0 / 1 1
+        break;
+    case Mirroring::OneLow:
+        physical = 0;                               // 0 0 / 0 0
+        break;
+    default:
+        physical = 1;                               // 1 1 / 1 1
+        break;
+    }
+//@ end
     return static_cast<std::uint16_t>(physical * 0x400 + (offset & 0x3FF));
 }
 
@@ -504,6 +520,13 @@ void Ppu::tick() {
 //@ 29
     // While the picture is drawn, v_ moves along with it.
     if ((mask_ & 0x18) && (scanline_ < kPpuHeight || scanline_ == 261)) {
+//@ end
+//@ 33
+        if (dot_ == 260) {
+            cart_.scanline();                       // MMC3 counts scanlines here
+        }
+//@ end
+//@ 29
         if (dot_ == 256) {
             increment_y();                          // the next row of pixels
         } else if (dot_ == 257) {                   // back to the left: the horizontal bits of t_

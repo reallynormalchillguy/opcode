@@ -5,9 +5,9 @@ writing a NES emulator. A real C++ compiler (Clang 8 + LLD with libc++,
 compiled to WebAssembly) runs inside the browser, so every example and
 exercise compiles and runs locally, with no server.
 
-The course was first written in C and is being rewritten in C++. Lessons 1-22
-are done; the last two (mappers and sound) show as "Soon" until they are
-rewritten. The finished C course is in the git history, at commit d51dd90.
+The course was first written in C and has been rewritten in C++: all 24
+lessons, from the first program to the sound chip. The C course is in the git
+history, at commit d51dd90.
 
 ## The C++ compiler
 
@@ -87,32 +87,34 @@ workbench's Download button saves the whole project as a .zip
 
 The CPU lessons (13 to 15) are generated from a reference implementation:
 
-- `cpu.staged.c` is a complete, nestest-passing 6502 with `//@ N` markers
+- `cpu.staged.cpp` is a complete, nestest-passing 6502 with `//@ N` markers
   saying which exercise stage each part belongs to. `stage.py` cuts out the
-  `cpu.c` a learner has after stage N.
+  `cpu.cpp` a learner has after stage N.
 - `opcodes.py` is the table of the 151 official opcodes; `gen_trace.py`
-  makes the course's disassembler (`trace.c`), `gen_main.py` the test bench
+  makes the course's disassembler (`trace.cpp`), `gen_main.py` the test bench
   and the nestest runner, and `tests.py` holds the test programs.
 - `python3 build.py` checks the table against the reference, compiles every
-  stage with gcc, runs the tests and nestest, and writes
+  stage with g++, runs the tests and nestest, and writes
   `lessons/cpu-data.js`. Run it after changing anything in that folder, then
   `node tests/lessons.test.js` to check the same in the browser compiler.
 
 ## The reference cartridge, PPU and controllers (tools/refnes)
 
-Lessons 16 to 23 work the same way. `cart.staged.c`, `bus.staged.c`,
-`ppu.staged.c`, `controller.staged.c` and `apu.staged.c` hold a reference
-cartridge (iNES, mappers 0-4 with MMC3's scanline IRQ), bus, PPU (background,
-sprites, sprite 0 hit, loopy scrolling), controllers and APU (pulses, frame
-counter, triangle, noise, DMC) with `//@ N` markers for exercise stages
-13-38; the CPU's IRQ is stage 34 of `tools/ref6502/cpu.staged.c`.
-Headers that grew during the course (`bus.h`, `ppu.h`, `cart.h`, `cpu.h`)
-and the course's `nes.c` are staged the same way; a header version is stored
-as `bus.h@22` (from stage 22 on). For a project whose files are newer than
-an exercise, the app adds the newest headers its files include.
+Lessons 16 to 24 work the same way. `cart.staged.cpp`, `bus.staged.cpp`,
+`ppu.staged.cpp`, `controller.staged.cpp` and `apu.staged.cpp` hold a reference
+cartridge (iNES, a `Mapper` class per mapper 0-4 with MMC3's scanline IRQ),
+bus, PPU (background, sprites, sprite 0 hit, loopy scrolling), controllers and
+APU (pulses, frame counter, triangle, noise, DMC) with `//@ N` markers for
+exercise stages 13-38; the CPU's IRQ is stage 34 of
+`tools/ref6502/cpu.staged.cpp`. Headers that grew during the course (`bus.h`,
+`ppu.h`, `cart.h`, `screen.h`) and the course's `nes.cpp` are staged the same
+way; a header version is stored as `bus.h@22` (from stage 22 on). `cpu.h` and
+`apu.h` belong to the learner, so they are learner files, not course headers.
+For a project whose files are newer than an exercise, the app adds the newest
+headers its files include.
 `course/` holds the programs the course provides (shown read-only to the
 learner) and `harness/` the hidden test programs (`.inc` files are inlined).
-`python3 build.py` compiles every stage with gcc, runs the tests and writes
+`python3 build.py` compiles every stage with g++, runs the tests and writes
 `lessons/nes-data.js`.
 
 ## The demo cartridge (tools/demo)

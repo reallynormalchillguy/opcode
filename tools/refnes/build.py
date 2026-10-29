@@ -1,10 +1,10 @@
 """Builds lessons/nes-data.js for lessons 17 onwards (cartridge, PPU, sprites,
-controllers, scrolling and mappers).
+controllers, scrolling, mappers and sound).
 
   python3 build.py
 
 Cuts the staged reference files into the learner files of every exercise
-stage (13-34, continuing the CPU's 1-12), compiles each stage natively with
+stage (13-38, continuing the CPU's 1-12), compiles each stage natively with
 its test program, runs the tests to get the expected output, and writes
 everything the lessons need. Run tests/lessons.test.js afterwards to check
 the same in the browser's compiler.
@@ -21,10 +21,10 @@ from stage import stage
 from gen_trace import TRACE_H, trace_c
 from gen_main import NESTEST_MAIN
 
-# The last stage that has been written in C++ so far.
-LAST_STAGE = 29
+# The last exercise stage.
+LAST_STAGE = 38
 
-STAGED = {name: open(name + '.staged.cpp').read() for name in ('cart', 'bus', 'ppu', 'controller')}
+STAGED = {name: open(name + '.staged.cpp').read() for name in ('cart', 'bus', 'ppu', 'controller', 'apu')}
 CPU_STAGED = open('../ref6502/cpu.staged.cpp').read()
 CPU_CPP = stage(CPU_STAGED, 11)
 CPU_H = open('../ref6502/cpu.h').read()
@@ -34,7 +34,13 @@ SKELETON = {
     'cart': '#include "cart.h"\n\n// Write the Cartridge member functions here. cart.h lists them.\n',
     'ppu': '#include "ppu.h"\n\n// Write the Ppu member functions here. ppu.h lists them.\n',
     'controller': '#include "controller.h"\n\n// Write the Controllers member functions here. controller.h lists them.\n',
+    'apu': '#include "apu.h"\n\n// Write the Apu member functions here. apu.h lists them.\n',
 }
+APU_H = open('apu.h').read()
+# apu.h belongs to the learner, like cpu.h: it starts with the public part
+# only, and the learner adds the channels as the lesson goes.
+_cut = APU_H.index('    Bus* bus_ = nullptr;\n') + len('    Bus* bus_ = nullptr;\n')
+APU_H_START = APU_H[:_cut] + '\n    // Your channels go here: this file is yours, like cpu.h.\n};\n'
 
 
 def learner(name, n):
@@ -51,6 +57,10 @@ def learner(name, n):
         return OLD_BUS_CPP if n < 15 else stage(STAGED['bus'], n)
     if name == 'controller.cpp':
         return SKELETON['controller'] if n < 25 else stage(STAGED['controller'], n)
+    if name == 'apu.cpp':
+        return SKELETON['apu'] if n < 35 else stage(STAGED['apu'], n)
+    if name == 'apu.h':
+        return APU_H_START if n < 35 else stage(APU_H, n)
     raise KeyError(name)
 
 
@@ -93,7 +103,8 @@ def nestest_cart():
 # Headers that grew during the course are staged too. The version a stage
 # sees is called 'bus.h@19' (bus.h from stage 19 on); the first one keeps
 # the plain name.
-STAGED_HEADERS = {'bus.h': [15, 19, 22, 26], 'ppu.h': [16, 22, 23, 24, 28, 29], 'cart.h': [13], 'screen.h': [17]}
+STAGED_HEADERS = {'bus.h': [15, 19, 22, 26, 35], 'ppu.h': [16, 22, 23, 24, 28, 29], 'cart.h': [13, 30, 31, 32, 33],
+                  'screen.h': [17, 35]}
 HEADERS = {n: open(n).read() for n in ('palette.h', 'palette.cpp', 'controller.h')}
 for _name, _starts in STAGED_HEADERS.items():
     for _i, _n in enumerate(_starts):
@@ -128,11 +139,21 @@ MAINS = {
     27: course_program('nes.cpp', 27),
     28: course_program('scrollmon.cpp', 28),
     29: course_program('nes.cpp', 29),
+    30: course_program('nes.cpp', 30),
+    31: course_program('nes.cpp', 31),
+    32: course_program('nes.cpp', 32),
+    33: course_program('irqmon.cpp', 33),
+    34: course_program('nes.cpp', 34),
+    35: course_program('nes.cpp', 35),
+    36: course_program('nes.cpp', 36),
+    37: course_program('nes.cpp', 37),
+    38: course_program('nes.cpp', 38),
 }
 
 NES = ['bus.h', 'cart.h', 'ppu.h', 'palette.h', 'palette.cpp', 'screen.h']
 EMU = ['ppu.cpp', 'bus.cpp', 'cart.cpp', 'cpu.cpp', 'cpu.h']
 DEMO = ['opcode-demo.nes']
+APU_REST = ['cpu.cpp', 'cpu.h', 'cart.cpp', 'ppu.cpp', 'controller.cpp']
 
 # For every stage: course files (besides main.cpp), learner files (first one
 # is opened), which files the exercise changes, the test program and its tests.
@@ -159,6 +180,24 @@ STAGES = {
     28: dict(course=NES + ['controller.h'], learner=EMU + ['controller.cpp'], changes=['ppu.cpp'], harness='h28', tests=[1, 2, 3, 4, 5]),
     29: dict(course=NES + ['controller.h'], learner=EMU + ['controller.cpp'], changes=['ppu.cpp'], harness='h29',
              tests=[1, 2, 3, 4, 5, 6], data=DEMO),
+    30: dict(course=NES + ['controller.h'], learner=['cart.cpp', 'ppu.cpp', 'bus.cpp', 'cpu.cpp', 'cpu.h', 'controller.cpp'],
+             changes=['cart.cpp'], harness='h30', tests=[1, 2, 3, 4, 5]),
+    31: dict(course=NES + ['controller.h'], learner=['cart.cpp', 'ppu.cpp', 'bus.cpp', 'cpu.cpp', 'cpu.h', 'controller.cpp'],
+             changes=['cart.cpp', 'ppu.cpp'], harness='h31', tests=[1, 2, 3, 4, 5]),
+    32: dict(course=NES + ['controller.h'], learner=['cart.cpp', 'ppu.cpp', 'bus.cpp', 'cpu.cpp', 'cpu.h', 'controller.cpp'],
+             changes=['cart.cpp'], harness='h32', tests=[1, 2, 3, 4]),
+    33: dict(course=NES + ['controller.h'], learner=['cart.cpp', 'ppu.cpp', 'bus.cpp', 'cpu.cpp', 'cpu.h', 'controller.cpp'],
+             changes=['cart.cpp', 'ppu.cpp'], harness='h33', tests=[1, 2, 3, 4, 5]),
+    34: dict(course=NES + ['controller.h'], learner=['cpu.cpp', 'cpu.h', 'cart.cpp', 'ppu.cpp', 'bus.cpp', 'controller.cpp'],
+             changes=['cpu.cpp'], harness='h34', tests=[1, 2, 3, 4], data=['opcode-mmc3.nes']),
+    35: dict(course=NES + ['controller.h'], learner=['apu.cpp', 'apu.h', 'bus.cpp'] + APU_REST, changes=['apu.cpp', 'apu.h', 'bus.cpp'],
+             harness='h35', tests=[1, 2, 3, 4, 5]),
+    36: dict(course=NES + ['controller.h'], learner=['apu.cpp', 'apu.h', 'bus.cpp'] + APU_REST, changes=['apu.cpp', 'apu.h'],
+             harness='h36', tests=[1, 2, 3, 4, 5]),
+    37: dict(course=NES + ['controller.h'], learner=['apu.cpp', 'apu.h', 'bus.cpp'] + APU_REST, changes=['apu.cpp', 'apu.h'],
+             harness='h37', tests=[1, 2, 3, 4]),
+    38: dict(course=NES + ['controller.h'], learner=['apu.cpp', 'apu.h', 'bus.cpp'] + APU_REST, changes=['apu.cpp', 'apu.h'],
+             harness='h38', tests=[1, 2, 3, 4], data=['opcode-sound.nes']),
 }
 
 SCREEN_STUB = ('#include "screen.h"\nextern "C" {\nvoid screen_show(const std::uint32_t*) {}\nvoid screen_loop(void (*)()) {}\n'

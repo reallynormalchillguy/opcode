@@ -8,6 +8,9 @@
 //@ 26
 #include "controller.h"
 //@ end
+//@ 35
+#include "apu.h"
+//@ end
 
 // The CPU bus: every address the CPU can read or write goes through here.
 class Bus {
@@ -18,8 +21,12 @@ public:
 //@ 19-25
     Bus(Cartridge& cart, Ppu& ppu) : cart_(cart), ppu_(ppu) {}
 //@ end
-//@ 26
+//@ 26-34
     Bus(Cartridge& cart, Ppu& ppu, Controllers& controllers) : cart_(cart), ppu_(ppu), controllers_(controllers) {}
+//@ end
+//@ 35
+    Bus(Cartridge& cart, Ppu& ppu, Controllers& controllers, Apu& apu)
+        : cart_(cart), ppu_(ppu), controllers_(controllers), apu_(apu) {}
 //@ end
 
     // Clear the work RAM.
@@ -49,6 +56,9 @@ private:
 //@ end
 //@ 26
     Controllers& controllers_;                // 4016 and 4017
+//@ end
+//@ 35
+    Apu& apu_;                                // the sound chip, 4000-4017
 //@ end
 //@ 22
     int stall_ = 0;                           // cycles the CPU has to wait after an OAM DMA
