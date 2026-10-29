@@ -5,9 +5,9 @@ writing a NES emulator. A real C++ compiler (Clang 8 + LLD with libc++,
 compiled to WebAssembly) runs inside the browser, so every example and
 exercise compiles and runs locally, with no server.
 
-The course is being rewritten from C to C++ on the `cpp` branch: the C++
-fundamentals first, then the emulator, lesson by lesson. Lessons not yet
-rewritten show as "Soon". `main` keeps the finished C course until then.
+The course was first written in C and is being rewritten in C++. Lessons 1-22
+are done; the last two (mappers and sound) show as "Soon" until they are
+rewritten. The finished C course is in the git history, at commit d51dd90.
 
 ## The C++ compiler
 
