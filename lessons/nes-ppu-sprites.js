@@ -37,7 +37,7 @@
         ['LDA #$02', 'The page: <code>$0200</code>-<code>$02FF</code>.'],
         ['STA $4014', 'OAMDMA. The console copies <code>$0200</code>, <code>$0201</code> … <code>$02FF</code> into OAMDATA, one byte after another.'],
       ] },
-      { t: 'p', html: 'The copy is done by the CPU chip itself, but not by your <code>cpu_step</code>: the processor stops running instructions for 513 cycles while it moves the bytes. Your bus does the copy at once and remembers the 513 cycles, and the course\'s <code>main.c</code> asks for them with <code>bus_take_stall()</code> and ticks the PPU for them too, so the frame keeps its length.' },
+      { t: 'p', html: 'The copy is done by the CPU chip itself, but not by your <code>Cpu::step</code>: the processor stops running instructions for 513 cycles while it moves the bytes. Your bus does the copy at once and remembers the 513 cycles, and the course\'s <code>main.cpp</code> asks for them with <code>bus.take_stall()</code> and ticks the PPU for them too, so the frame keeps its length.' },
 
       { t: 'h', text: 'Eight sprites per scanline' },
       { t: 'p', html: 'Before drawing each scanline, the PPU looks through all 64 sprites in order and picks the ones that cover that line. It has room for only eight: the ninth and later are left out of that line. When too many sprites share a line, games change the order of their sprites every frame, so each one is missing only some of the time. That is the flicker you see in busy NES games.' },
@@ -50,18 +50,18 @@
         'That sprite pixel is drawn if its priority bit is 0, or if the background pixel is see-through (colour 0). Otherwise the background shows.',
       ] },
       { t: 'p', html: 'The order of the steps has an odd effect, which a few games use on purpose: a lower-numbered sprite that is behind the background still hides the higher-numbered sprites at that pixel, even ones that are in front. An invisible sprite can cut a piece out of the sprites after it.' },
-      { t: 'code', title: 'ppu.c, the sprite part of a scanline (outline)', lines: [
-        ['int count = ppu_sprites_on_line(y, found);', 'Which sprites, in order, up to 8.'],
-        ['uint8_t taken[256] = { 0 };', 'Marks the pixels a sprite has already won.'],
+      { t: 'code', title: 'ppu.cpp, the sprite part of a scanline (outline)', lines: [
+        ['int count = sprites_on_line(y, found);', 'Which sprites, in order, up to 8.'],
+        ['std::array<bool, kPpuWidth> taken{};', 'Marks the pixels a sprite has already won.'],
         ['for each sprite n in found:', 'Lowest number first.'],
-        ['    row_in = y - (Y + 1);  /* flipped V: height - 1 - row_in */', 'Which row of the tile this line shows.'],
-        ['    ppu_tile_row(table, tile, row_in, colours);', 'Your function from lesson 17.'],
+        ['    row_in = y - (Y + 1);  // flipped V: height - 1 - row_in', 'Which row of the tile this line shows.'],
+        ['    auto colours = tile_row(table, tile, row_in);', 'Your member function from lesson 18.'],
         ['    for i in 0..7: x = X + i; c = colours[flip H ? 7 - i : i];', ''],
-        ['        if (c == 0 || taken[x]) continue;  taken[x] = 1;', 'See-through, or a lower sprite was here first.'],
+        ['        if (c == 0 || taken[x]) continue;  taken[x] = true;', 'See-through, or a lower sprite was here first.'],
         ['        if (behind && bg_pixel[x] != 0) continue;', 'The background covers it.'],
-        ['        row[x] = colour from palette 4-7;', '<code>ppu_read(0x3F10 + palette * 4 + c)</code>'],
+        ['        row[x] = colour from palette 4-7;', '<code>read(0x3F10 + palette * 4 + c)</code>'],
       ] },
-      { t: 'p', html: 'For the second step the sprites need to know which background pixels were see-through. So the background drawing changes a little: it also fills an array <code>bg_pixel</code> with the colour number (0-3) of each pixel it draws, 0 where the background is off or hidden.' },
+      { t: 'p', html: 'For the second step the sprites need to know which background pixels were see-through. So the background drawing changes a little: it also fills a <code>std::array&lt;std::uint8_t, kPpuWidth&gt;</code> called <code>bg_pixel</code> with the colour number (0-3) of each pixel it draws, 0 where the background is off or hidden.' },
       { t: 'note', html: 'One more rule, from PPUMASK: sprites are hidden in the leftmost 8 pixels unless bit 2 is set, just as bit 1 does for the background. Games hide that column while they redraw it, so things do not pop in at the edge.' },
 
       { t: 'quiz', q: 'A sprite has Y = <code>$20</code> and the PPU makes 8 × 8 sprites. Which scanlines show it?', options: ['32 to 39', '33 to 40', '31 to 38'], answer: 1, explain: '<code>$20</code> is 32. A sprite starts one line below its Y, so 33, and covers 8 lines: 33 to 40.' },
@@ -76,14 +76,14 @@
         title: 'OAM DMA',
         rom: 'opcode-demo.nes',
         stdin: '60',
-        prompt: `<p>In <code>bus.c</code>, make a write to <code>4014</code> copy a page of memory to the sprites: for <code>i</code> from 0 to 255, read <code>bus_read(value * 256 + i)</code> and write it to OAMDATA with <code>ppu_register_write(4, ...)</code>. Starting at the current OAMADDR and moving it on is OAMDATA's own job.</p>
-<p>Keep a private <code>stall</code> count of CPU cycles: each DMA adds 513 to it, <code>bus_reset</code> sets it to 0, and the new function in <code>bus.h</code> hands it over:</p>
-<pre>int bus_take_stall(void)   // return stall, then set it to 0</pre>
+        prompt: `<p>In <code>bus.cpp</code>, make a write to <code>4014</code> copy a page of memory to the sprites: for <code>i</code> from 0 to 255, read <code>read(value * 256 + i)</code> and write it to OAMDATA with <code>ppu_.register_write(4, ...)</code>. Starting at the current OAMADDR and moving it on is OAMDATA's own job.</p>
+<p>The new <code>bus.h</code> has a private <code>stall_</code> count of CPU cycles: each DMA adds 513 to it, <code>reset</code> sets it to 0, and the new member function hands it over:</p>
+<pre>int Bus::take_stall()   // return stall_, then set it to 0</pre>
 <p>Run shows the sprites the demo has put in OAM after 60 frames (Program input). They are not on the picture yet: that is the next two exercises.</p>`,
         names: ['A DMA copies the page', 'The stall, once', 'DMA starts at OAMADDR', 'Pages in the cartridge and in mirrored RAM', 'The demo\'s sprites after 60 frames'],
         hints: [
-          'Put the new case next to the PPU one in <code>bus_write</code>: <code>} else if (addr == 0x4014) {</code>. It has to come before the cartridge case, which takes everything from <code>4020</code>.',
-          'Build the address as a <code>uint16_t</code>: <code>(uint16_t)(value &lt;&lt; 8 | i)</code>. Going through <code>bus_read</code> means a page in RAM, its mirrors or the cartridge all work.',
+          'Put the new case next to the PPU one in <code>Bus::write</code>: <code>} else if (addr == 0x4014) {</code>. It has to come before the cartridge case, which takes everything from <code>4020</code>.',
+          'Build the address as a <code>std::uint16_t</code>: <code>static_cast&lt;std::uint16_t&gt;(value &lt;&lt; 8 | i)</code>. Going through the bus\'s own <code>read</code> means a page in RAM, its mirrors or the cartridge all work.',
         ],
       }),
       N.exercise({
@@ -92,14 +92,14 @@
         title: 'Which sprites are on a line',
         rom: 'opcode-demo.nes',
         stdin: '60',
-        prompt: `<p>Write the function <code>ppu.h</code> now declares:</p>
-<pre>int ppu_sprites_on_line(int y, uint8_t found[8])</pre>
+        prompt: `<p>Write the member function <code>ppu.h</code> now declares:</p>
+<pre>int Ppu::sprites_on_line(int y, std::array&lt;std::uint8_t, 8&gt;&amp; found) const</pre>
 <p>Go through sprites 0 to 63. A sprite is on line <code>y</code> when <code>y</code> is between <code>Y + 1</code> and <code>Y + height</code>, where <code>height</code> is 16 if PPUCTRL bit 5 is set, otherwise 8. Put the numbers of the first eight you find into <code>found</code>, in order, and return how many you found in all (so it can be more than 8).</p>
 <p>Run lists, line by line, what your function says about the demo's screen: the robot is four sprites, two on each of its lines.</p>`,
         names: ['A sprite covers 8 lines from Y + 1', '8 × 16 sprites cover 16', 'Only the first eight are listed, all are counted', 'Y from EF up is off screen', 'The demo\'s sprites, line by line'],
         hints: [
-          'Y is <code>oam[i * 4]</code>. Compute <code>int top = oam[i * 4] + 1;</code> as an <code>int</code>, so a Y of <code>FF</code> gives 256 and never matches a line.',
-          'Count every match, but only store while <code>count &lt; 8</code>: <code>if (count &lt; 8) found[count] = i; count++;</code>',
+          'Y is <code>oam_[i * 4]</code>. Compute <code>int top = oam_[i * 4] + 1;</code> as an <code>int</code>, so a Y of <code>FF</code> gives 256 and never matches a line.',
+          'Count every match, but only store while <code>count &lt; 8</code>: <code>if (count &lt; 8) found[count] = static_cast&lt;std::uint8_t&gt;(i); count++;</code>',
         ],
       }),
       N.exercise({
@@ -108,15 +108,15 @@
         title: 'Draw the sprites',
         rom: 'opcode-demo.nes',
         timeoutMs: 15000,
-        prompt: `<p>Split <code>render_scanline</code> in two:</p>
-<ul><li><code>static void draw_background(int y, uint32_t *row, uint8_t bg_pixel[256])</code>: your background code, which now also stores each pixel's colour number in <code>bg_pixel[x]</code> (0 for the backdrop, a hidden left column, or the background turned off).</li>
-<li><code>static void draw_sprites(int y, uint32_t *row, const uint8_t bg_pixel[256])</code>: if PPUMASK bit 4 is set, draw the sprites on line <code>y</code> over <code>row</code>, as the lesson describes: lowest number first, a pixel already taken by a sprite stays taken, colour 0 is see-through, flips (bits 6 and 7), priority (bit 5), palettes 4-7, 8 × 16 sprites (PPUCTRL bit 5), the pattern table from PPUCTRL bit 3 for 8 × 8 sprites, and no sprite pixels at <code>x &lt; 8</code> unless PPUMASK bit 2 is set.</li></ul>
-<p>Then <code>render_scanline(y)</code> calls both, with a <code>uint8_t bg_pixel[256]</code> of its own. Press Run: the robot, the bytes and a drone appear. The drone flies behind the bushes.</p>`,
+        prompt: `<p>Split <code>render_scanline</code> in two private member functions, which the new <code>ppu.h</code> declares:</p>
+<ul><li><code>void Ppu::draw_background(int y, std::uint32_t* row, std::array&lt;std::uint8_t, kPpuWidth&gt;&amp; bg_pixel)</code>: your background code, which now also stores each pixel's colour number in <code>bg_pixel[x]</code> (0 for the backdrop, a hidden left column, or the background turned off).</li>
+<li><code>void Ppu::draw_sprites(int y, std::uint32_t* row, const std::array&lt;std::uint8_t, kPpuWidth&gt;&amp; bg_pixel)</code>: if PPUMASK bit 4 is set, draw the sprites on line <code>y</code> over <code>row</code>, as the lesson describes: lowest number first, a pixel already taken by a sprite stays taken, colour 0 is see-through, flips (bits 6 and 7), priority (bit 5), palettes 4-7, 8 × 16 sprites (PPUCTRL bit 5), the pattern table from PPUCTRL bit 3 for 8 × 8 sprites, and no sprite pixels at <code>x &lt; 8</code> unless PPUMASK bit 2 is set.</li></ul>
+<p>Then <code>render_scanline(y)</code> works out <code>row</code>, makes a <code>std::array&lt;std::uint8_t, kPpuWidth&gt; bg_pixel{};</code> and calls both. Press Run: the robot, the bytes and a drone appear. The drone flies behind the bushes.</p>`,
         names: ['Two sprites over the backdrop', 'Flipped sprites', 'Priority, and the lowest number wins', '8 × 16 sprites', 'The left column and sprites off', 'Eight sprites on a line, no more', 'The demo\'s picture after 90 frames'],
         hints: [
-          'The sprite\'s 4 bytes: <code>const uint8_t *s = &amp;oam[found[n] * 4];</code> then <code>s[0]</code> Y, <code>s[1]</code> tile, <code>s[2]</code> attributes, <code>s[3]</code> X. Its pixels run from <code>x = s[3]</code> to <code>s[3] + 7</code>; stop at 255.',
+          'The sprite\'s 4 bytes: <code>const std::uint8_t* s = &amp;oam_[found[n] * 4];</code> then <code>s[0]</code> Y, <code>s[1]</code> tile, <code>s[2]</code> attributes, <code>s[3]</code> X. Its pixels run from <code>x = s[3]</code> to <code>s[3] + 7</code>; stop at 255.',
           'Flip vertically by changing the row: <code>row_in = height - 1 - row_in</code>. For 8 × 16, do that first, then pick the tile: <code>tile &amp; 0xFE</code>, plus 1 if <code>row_in &gt;= 8</code> (and then <code>row_in -= 8</code>).',
-          'Behind the background: <code>if ((attr &amp; 0x20) &amp;&amp; bg_pixel[x] != 0) continue;</code> but only after marking <code>taken[x] = 1</code>, so the lower sprite still hides the ones after it.',
+          'Behind the background: <code>if ((attr &amp; 0x20) &amp;&amp; bg_pixel[x] != 0) continue;</code> but only after marking <code>taken[x] = true</code>, so the lower sprite still hides the ones after it.',
         ],
       }),
     ],

@@ -22,9 +22,9 @@ from gen_trace import TRACE_H, trace_c
 from gen_main import NESTEST_MAIN
 
 # The last stage that has been written in C++ so far.
-LAST_STAGE = 21
+LAST_STAGE = 29
 
-STAGED = {name: open(name + '.staged.cpp').read() for name in ('cart', 'bus', 'ppu')}
+STAGED = {name: open(name + '.staged.cpp').read() for name in ('cart', 'bus', 'ppu', 'controller')}
 CPU_STAGED = open('../ref6502/cpu.staged.cpp').read()
 CPU_CPP = stage(CPU_STAGED, 11)
 CPU_H = open('../ref6502/cpu.h').read()
@@ -33,6 +33,7 @@ OLD_BUS_CPP = open('../ref6502/bus.cpp').read()
 SKELETON = {
     'cart': '#include "cart.h"\n\n// Write the Cartridge member functions here. cart.h lists them.\n',
     'ppu': '#include "ppu.h"\n\n// Write the Ppu member functions here. ppu.h lists them.\n',
+    'controller': '#include "controller.h"\n\n// Write the Controllers member functions here. controller.h lists them.\n',
 }
 
 
@@ -48,6 +49,8 @@ def learner(name, n):
         return SKELETON['ppu'] if n < 16 else stage(STAGED['ppu'], n)
     if name == 'bus.cpp':
         return OLD_BUS_CPP if n < 15 else stage(STAGED['bus'], n)
+    if name == 'controller.cpp':
+        return SKELETON['controller'] if n < 25 else stage(STAGED['controller'], n)
     raise KeyError(name)
 
 
@@ -90,8 +93,8 @@ def nestest_cart():
 # Headers that grew during the course are staged too. The version a stage
 # sees is called 'bus.h@19' (bus.h from stage 19 on); the first one keeps
 # the plain name.
-STAGED_HEADERS = {'bus.h': [15, 19], 'ppu.h': [16], 'cart.h': [13], 'screen.h': [17]}
-HEADERS = {n: open(n).read() for n in ('palette.h', 'palette.cpp')}
+STAGED_HEADERS = {'bus.h': [15, 19, 22, 26], 'ppu.h': [16, 22, 23, 24, 28, 29], 'cart.h': [13], 'screen.h': [17]}
+HEADERS = {n: open(n).read() for n in ('palette.h', 'palette.cpp', 'controller.h')}
 for _name, _starts in STAGED_HEADERS.items():
     for _i, _n in enumerate(_starts):
         HEADERS[_name if _i == 0 else '%s@%d' % (_name, _n)] = stage(open(_name).read(), _n)
@@ -117,10 +120,19 @@ MAINS = {
     19: inline_includes(open('course/busmon.cpp').read()),
     20: inline_includes(open('course/timeline.cpp').read()),
     21: course_program('nes.cpp', 21),
+    22: course_program('oamview.cpp', 22),
+    23: course_program('linemon.cpp', 23),
+    24: course_program('nes.cpp', 24),
+    25: course_program('padmon.cpp', 25),
+    26: course_program('nes.cpp', 26),
+    27: course_program('nes.cpp', 27),
+    28: course_program('scrollmon.cpp', 28),
+    29: course_program('nes.cpp', 29),
 }
 
 NES = ['bus.h', 'cart.h', 'ppu.h', 'palette.h', 'palette.cpp', 'screen.h']
 EMU = ['ppu.cpp', 'bus.cpp', 'cart.cpp', 'cpu.cpp', 'cpu.h']
+DEMO = ['opcode-demo.nes']
 
 # For every stage: course files (besides main.cpp), learner files (first one
 # is opened), which files the exercise changes, the test program and its tests.
@@ -135,6 +147,18 @@ STAGES = {
     19: dict(course=['bus.h', 'cart.h', 'ppu.h'], learner=['ppu.cpp', 'bus.cpp', 'cart.cpp'], changes=['ppu.cpp', 'bus.cpp'], harness='h19', tests=[1, 2, 3, 4]),
     20: dict(course=['ppu.h', 'cart.h'], learner=['ppu.cpp', 'cart.cpp'], changes=['ppu.cpp'], harness='h20', tests=[1, 2, 3, 4, 5]),
     21: dict(course=NES, learner=EMU, changes=['ppu.cpp'], harness='h21', tests=[1, 2, 3, 4, 5, 6, 7], data=['nestest.nes']),
+    22: dict(course=NES, learner=['bus.cpp', 'ppu.cpp', 'cart.cpp', 'cpu.cpp', 'cpu.h'], changes=['bus.cpp'], harness='h22', tests=[1, 2, 3, 4, 5], data=DEMO),
+    23: dict(course=NES, learner=EMU, changes=['ppu.cpp'], harness='h23', tests=[1, 2, 3, 4, 5], data=DEMO),
+    24: dict(course=NES, learner=EMU, changes=['ppu.cpp'], harness='h24', tests=[1, 2, 3, 4, 5, 6, 7], data=DEMO),
+    25: dict(course=NES + ['controller.h'], learner=['controller.cpp'] + EMU, changes=['controller.cpp'], harness='h25',
+             tests=[1, 2, 3, 4, 5]),
+    26: dict(course=NES + ['controller.h'], learner=['bus.cpp', 'controller.cpp', 'ppu.cpp', 'cart.cpp', 'cpu.cpp', 'cpu.h'], changes=['bus.cpp'],
+             harness='h26', tests=[1, 2, 3, 4], data=DEMO),
+    27: dict(course=NES + ['controller.h'], learner=EMU + ['controller.cpp'], changes=['ppu.cpp'], harness='h27',
+             tests=[1, 2, 3, 4, 5, 6], data=DEMO),
+    28: dict(course=NES + ['controller.h'], learner=EMU + ['controller.cpp'], changes=['ppu.cpp'], harness='h28', tests=[1, 2, 3, 4, 5]),
+    29: dict(course=NES + ['controller.h'], learner=EMU + ['controller.cpp'], changes=['ppu.cpp'], harness='h29',
+             tests=[1, 2, 3, 4, 5, 6], data=DEMO),
 }
 
 SCREEN_STUB = ('#include "screen.h"\nextern "C" {\nvoid screen_show(const std::uint32_t*) {}\nvoid screen_loop(void (*)()) {}\n'
@@ -169,7 +193,7 @@ def main():
         for name, text in files.items():
             open(os.path.join(d, name), 'w').write(text)
         # Headers the course program does not list, in case a learner file includes them.
-        for name in ('screen.h', 'palette.h', 'palette.cpp', 'bus.h', 'cart.h', 'ppu.h'):
+        for name in ('screen.h', 'palette.h', 'palette.cpp', 'bus.h', 'cart.h', 'ppu.h', 'controller.h'):
             if not os.path.exists(os.path.join(d, name)):
                 open(os.path.join(d, name), 'w').write(HEADERS[header(name, n)])
         if not os.path.exists(os.path.join(d, 'cpu.h')):

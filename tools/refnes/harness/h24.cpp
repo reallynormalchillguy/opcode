@@ -1,25 +1,35 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <vector>
 #include "bus.h"
 #include "cart.h"
 #include "cpu.h"
 #include "ppu.h"
 #include "palette.h"
 #include "common.inc"
+
+Cartridge cart;
+Ppu ppu(cart);
+Bus bus(cart, ppu);
+Cpu cpu(bus);
+
 #include "scene.inc"
 #include "demo.inc"
 
-int main(void) {
+int main() {
     int t = 0;
-    if (scanf("%d", &t) != 1) return 1;
+    if (!(std::cin >> t)) return 1;
     build_sprite_scene();
     if (t == 1) {
         sprite(0, 19, 1, 0x00, 20);              // the arrow, palette 4, at x 20, from line 20
         sprite(1, 19, 2, 0x01, 30);              // a solid square, palette 5
         finish_frame();
-        printf("two sprites over the backdrop (x 18-39, lines 19-28):\n");
+        std::printf("two sprites over the backdrop (x 18-39, lines 19-28):\n");
         show_area(18, 19, 22, 10);
     }
     if (t == 2) {
@@ -28,7 +38,7 @@ int main(void) {
         sprite(2, 19, 1, 0x80, 30);
         sprite(3, 19, 1, 0xC0, 40);
         finish_frame();
-        printf("the arrow: as it is, flipped H, flipped V, both:\n");
+        std::printf("the arrow: as it is, flipped H, flipped V, both:\n");
         show_area(10, 20, 38, 8);
     }
     if (t == 3) {
@@ -37,14 +47,14 @@ int main(void) {
         sprite(0, 15, 2, 0x20, 14);              // behind: shows only where the background is see-through
         sprite(1, 15, 2, 0x00, 26);              // in front
         finish_frame();
-        printf("behind (x 14-21) and in front (x 26-33) of the background:\n");
+        std::printf("behind (x 14-21) and in front (x 26-33) of the background:\n");
         show_area(12, 16, 24, 2);
         build_sprite_scene();
         put_tile(2, 2, 1);
         sprite(0, 15, 2, 0x20, 16);              // sprite 0, behind
         sprite(1, 15, 2, 0x00, 20);              // sprite 1, in front, overlapping it at x 20-23
         finish_frame();
-        printf("sprite 0 behind the background hides sprite 1 where they overlap:\n");
+        std::printf("sprite 0 behind the background hides sprite 1 where they overlap:\n");
         show_area(14, 16, 16, 1);
     }
     if (t == 4) {
@@ -53,7 +63,7 @@ int main(void) {
         sprite(1, 9, 7, 0x00, 20);               // odd: tiles 6 and 7 from 1000
         sprite(2, 9, 4, 0x80, 30);               // flipped vertically: the halves swap
         finish_frame();
-        printf("8 x 16 sprites, lines 10-25 (every 3rd):\n");
+        std::printf("8 x 16 sprites, lines 10-25 (every 3rd):\n");
         for (int y = 10; y < 26; y += 3) show_area(8, y, 32, 1);
     }
     if (t == 5) {
@@ -61,24 +71,23 @@ int main(void) {
         sprite(1, 19, 2, 0x01, 12);
         w(1, 0x18);                              // left column hidden for both layers
         finish_frame();
-        printf("left column hidden:\n");
+        std::printf("left column hidden:\n");
         show_area(0, 20, 22, 1);
         w(1, 0x0E);                              // sprites off
         finish_frame();
-        printf("sprites off:\n");
+        std::printf("sprites off:\n");
         show_area(0, 20, 22, 1);
     }
     if (t == 6) {
         for (int i = 0; i < 10; i++) sprite(i, 49, 2, i & 1, 10 + i * 9);
         finish_frame();
-        printf("10 sprites on one line: only 8 are drawn\n");
+        std::printf("10 sprites on one line: only 8 are drawn\n");
         show_area(8, 50, 96, 1);
     }
     if (t == 7) {
         if (!demo_start()) return 0;
         for (int f = 0; f < 90; f++) demo_frame();
-        printf("opcode-demo.nes after 90 frames, a checksum of each band of 16 rows:\n");
-        for (int b = 0; b < 15; b++) printf("  rows %3d-%3d: %08X\n", b * 16, b * 16 + 15, crc_rows(b * 16, b * 16 + 15));
+        std::printf("opcode-demo.nes after 90 frames, a checksum of each band of 16 rows:\n");
+        for (int b = 0; b < 15; b++) std::printf("  rows %3d-%3d: %08X\n", b * 16, b * 16 + 15, crc_rows(b * 16, b * 16 + 15));
     }
-    return 0;
 }
